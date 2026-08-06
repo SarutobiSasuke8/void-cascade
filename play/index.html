@@ -161,6 +161,58 @@
     color: #3A7BFF;
   }
   .kid-toggle input { accent-color: #00F5FF; width: 18px; height: 18px; }
+  .menu-board {
+    width: min(88vw, 320px);
+    border: 1px solid rgba(0,245,255,0.25);
+    background: rgba(0,245,255,0.04);
+    padding: 0.7rem 0.4rem;
+    margin-bottom: 1.6rem;
+  }
+  .menu-board-title {
+    font-size: 0.7rem;
+    letter-spacing: 0.35em;
+    color: #3A7BFF;
+    text-align: center;
+    margin-bottom: 0.4rem;
+  }
+  .menu-board .hs-row { font-size: 0.8rem; padding: 0.25rem 0.8rem; }
+  .bindlist {
+    width: min(90vw, 400px);
+    margin: 1.2rem 0 0.6rem;
+  }
+  .bind-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.35rem 0.6rem;
+    border-bottom: 1px solid rgba(0,245,255,0.12);
+  }
+  .bind-name { font-size: 0.8rem; letter-spacing: 0.15em; color: #aaa; }
+  .bindkey {
+    pointer-events: auto;
+    background: rgba(0,245,255,0.06);
+    border: 1px solid rgba(0,245,255,0.45);
+    color: #00F5FF;
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 0.28rem 0.7rem;
+    margin-left: 0.45rem;
+    min-width: 3.6rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .bindkey:hover { background: rgba(0,245,255,0.18); box-shadow: 0 0 12px rgba(0,245,255,0.35); }
+  .bindkey.listening {
+    border-color: #FF00AA;
+    color: #FF00AA;
+    animation: listenPulse 0.8s ease-in-out infinite;
+  }
+  @keyframes listenPulse {
+    50% { background: rgba(255,0,170,0.18); }
+  }
+  .bindhint { font-size: 0.65rem; letter-spacing: 0.15em; opacity: 0.45; margin-bottom: 0.8rem; }
   #fxLabel {
     position: absolute;
     bottom: 1.5rem;
@@ -185,6 +237,10 @@
     <div id="menu" class="screen">
       <div class="logo">VOID CASCADE</div>
       <div class="tagline">SHATTER THE VOID</div>
+      <div class="menu-board">
+        <div class="menu-board-title">TOP PILOTS</div>
+        <div id="menuScores"></div>
+      </div>
       <button class="btn" id="btnPlay">PLAY</button>
       <button class="btn secondary" id="btnScores">HIGH SCORES</button>
       <button class="btn secondary" id="btnControls">CONTROLS</button>
@@ -201,15 +257,9 @@
     </div>
     <div id="controls" class="screen hidden">
       <div class="logo" style="font-size:2.2rem">CONTROLS</div>
-      <div style="text-align:left; line-height:1.8; margin:1.5rem 0; font-size:0.9rem; color:#aaa;">
-        <div>← → / A D &nbsp;&nbsp; Rotate</div>
-        <div>↑ / W &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Thrust</div>
-        <div>SPACE / Z &nbsp;&nbsp;&nbsp; Fire</div>
-        <div>SHIFT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Shield (when available)</div>
-        <div>ESC / P &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Pause</div>
-        <div>B &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Toggle bloom (A/B)</div>
-        <div style="margin-top:1rem; color:#00F5FF">Gamepad fully supported</div>
-      </div>
+      <div id="bindList" class="bindlist"></div>
+      <div class="bindhint">Click a key to rebind it • B toggles bloom • Gamepad supported</div>
+      <button class="btn secondary" id="btnResetBinds">RESET TO DEFAULTS</button>
       <button class="btn secondary" id="btnBackControls">BACK</button>
     </div>
     <div id="pause" class="screen hidden">
@@ -230,6 +280,7 @@
       </div>
       <div class="hud-right">
         <div class="lives" id="hudLives">▲ ▲ ▲</div>
+        <div style="font-size:0.6rem; letter-spacing:0.25em; color:#3A7BFF; margin-top:4px;">SHIELD</div>
         <div class="shield-bar"><div class="shield-fill" id="shieldFill"></div></div>
       </div>
     </div>
@@ -314,7 +365,61 @@ let hitStop = 0;
 
 const keys = {};
 const gamepad = { axes: [0,0], buttons: {} };
-window.addEventListener('keydown', e => { keys[e.code] = true; if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault(); });
+
+// Rebindable controls. Each action has two slots; both fire it. Bindings are
+// stored in localStorage and edited from the Controls screen.
+const ACTIONS = [
+  ['left',   'ROTATE LEFT'],
+  ['right',  'ROTATE RIGHT'],
+  ['thrust', 'THRUST'],
+  ['fire',   'FIRE'],
+  ['shield', 'SHIELD'],
+  ['pause',  'PAUSE']
+];
+const DEFAULT_BINDS = {
+  left:   ['ArrowLeft', 'KeyA'],
+  right:  ['ArrowRight', 'KeyD'],
+  thrust: ['ArrowUp', 'KeyW'],
+  fire:   ['Space', 'KeyZ'],
+  shield: ['Backspace', 'ShiftLeft'],
+  pause:  ['Escape', 'KeyP']
+};
+let binds;
+try {
+  binds = { ...JSON.parse(localStorage.getItem('vc_binds') || 'null') };
+} catch (e) { binds = null; }
+for (const [a] of ACTIONS) {
+  if (!binds || !Array.isArray(binds[a]) || binds[a].length !== 2) {
+    binds = binds || {};
+    binds[a] = [...DEFAULT_BINDS[a]];
+  }
+}
+function saveBinds() { localStorage.setItem('vc_binds', JSON.stringify(binds)); }
+function down(action) { return binds[action].some(c => keys[c]); }
+function shieldActive() { return down('shield') || gamepad.buttons[5]; }
+
+// While the Controls screen is waiting for a key, this holds {action, slot}.
+// The capture listener below swallows the keypress so it cannot also pause the
+// game or scroll the page.
+let rebinding = null;
+window.addEventListener('keydown', e => {
+  if (!rebinding) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (e.code !== 'Escape') {
+    binds[rebinding.action][rebinding.slot] = e.code;
+    saveBinds();
+  }
+  rebinding = null;
+  renderBinds();
+}, true);
+
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  // Backspace must be suppressed or some browsers treat it as history-back
+  // mid-game, which would be a disastrous default for a shield key.
+  if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Backspace'].includes(e.code)) e.preventDefault();
+});
 window.addEventListener('keyup', e => keys[e.code] = false);
 
 function pollGamepad() {
@@ -455,27 +560,32 @@ function resetPlayer() {
   player.vx = player.vy = 0;
   player.angle = -Math.PI/2;
   player.invuln = 120;
-  player.shield = kidMode ? 80 : 0;
+  // Everyone starts with usable shield now that it is a core mechanic rather
+  // than a powerup-only bonus; pickups still refill it.
+  player.shield = kidMode ? 100 : 60;
   player.rapid = 0;
   player.fireCooldown = 0;
 }
 function updatePlayer() {
   let rot = 0;
-  if (keys['ArrowLeft'] || keys['KeyA']) rot -= 1;
-  if (keys['ArrowRight'] || keys['KeyD']) rot += 1;
+  if (down('left')) rot -= 1;
+  if (down('right')) rot += 1;
   rot += gamepad.axes[0];
   player.angle += rot * 0.085 * dt;
-  player.thrust = keys['ArrowUp'] || keys['KeyW'] || gamepad.buttons[0] || gamepad.buttons[7];
+  player.thrust = down('thrust') || gamepad.buttons[0] || gamepad.buttons[7];
   if (player.thrust) {
     const force = 0.18;
     player.vx += Math.cos(player.angle) * force * dt;
     player.vy += Math.sin(player.angle) * force * dt;
     // Emit proportional to elapsed time so the ribbon has the same density
-    // whether the display is 60Hz or 144Hz.
+    // whether the display is 60Hz or 144Hz. Exhaust is rocket fire: white-hot
+    // pops nearest the nozzle, orange body, red tail-off.
     const puffs = Math.max(1, Math.round(dt));
     for (let i = 0; i < puffs; i++) {
-      spawnTrail(player.x, player.y, player.angle, '#00F5FF');
-      if (Math.random() < 0.4) spawnTrail(player.x, player.y, player.angle + 0.3, '#3A7BFF');
+      const r = Math.random();
+      const c = r < 0.15 ? '#FFFFFF' : r < 0.45 ? '#FFD23F' : r < 0.8 ? '#FF7A00' : '#FF3C00';
+      spawnTrail(player.x, player.y, player.angle, c);
+      if (Math.random() < 0.35) spawnTrail(player.x, player.y, player.angle + 0.25, '#FF3C00');
     }
   }
   const maxSpeed = 7.5;
@@ -494,7 +604,7 @@ function updatePlayer() {
   if (player.y < -20) player.y = H+20;
   if (player.y > H+20) player.y = -20;
   player.fireCooldown -= dt;
-  const firePressed = keys['Space'] || keys['KeyZ'] || gamepad.buttons[1] || gamepad.buttons[2];
+  const firePressed = down('fire') || gamepad.buttons[1] || gamepad.buttons[2];
   if (firePressed && player.fireCooldown <= 0) {
     const rate = player.rapid > 0 ? 6 : 12;
     player.fireCooldown = rate;
@@ -502,8 +612,10 @@ function updatePlayer() {
     bullets.push({ x: player.x + Math.cos(player.angle)*18, y: player.y + Math.sin(player.angle)*18, vx: Math.cos(player.angle)*speed + player.vx*0.3, vy: Math.sin(player.angle)*speed + player.vy*0.3, life: 55, fromPlayer: true });
     spawnParticles(player.x + Math.cos(player.angle)*16, player.y + Math.sin(player.angle)*16, 4, '#00F5FF', 2, 12, 2);
   }
-  if ((keys['ShiftLeft'] || keys['ShiftRight'] || gamepad.buttons[5]) && player.shield > 0) {
-    player.shield = Math.max(0, player.shield - 0.6 * dt);
+  // Passive drain while held (~20/sec, so a full bar is 5s of cover) plus a
+  // flat cost per asteroid destroyed, paid in checkCollisions.
+  if (shieldActive() && player.shield > 0) {
+    player.shield = Math.max(0, player.shield - 0.33 * dt);
   }
   if (player.rapid > 0) player.rapid -= dt;
   if (player.invuln > 0) player.invuln -= dt;
@@ -514,42 +626,96 @@ function drawPlayer() {
   ctx.save();
   ctx.translate(player.x, player.y);
   ctx.rotate(player.angle);
-  if (player.shield > 5 && (keys['ShiftLeft']||keys['ShiftRight']||gamepad.buttons[5] || kidMode)) {
+
+  if (player.shield > 5 && (shieldActive() || kidMode)) {
     ctx.beginPath();
-    ctx.arc(0,0,22,0,Math.PI*2);
-    ctx.strokeStyle = `rgba(58,123,255,${0.3 + player.shield/200})`;
-    ctx.lineWidth = 2;
+    ctx.arc(0,0,24,0,Math.PI*2);
+    ctx.strokeStyle = `rgba(58,123,255,${0.35 + player.shield/200})`;
+    ctx.lineWidth = 2.5;
     ctx.stroke();
-    ctx.fillStyle = `rgba(58,123,255,0.08)`;
+    ctx.fillStyle = `rgba(58,123,255,0.09)`;
     ctx.fill();
   }
+
+  // Rocket flame, drawn under the hull: white core inside orange body, length
+  // flickering per frame. This plus the particle exhaust is the whole "fire".
+  if (player.thrust) {
+    const len = 15 + Math.random()*9;
+    const flame = ctx.createLinearGradient(-11, 0, -11 - len, 0);
+    flame.addColorStop(0, 'rgba(255,255,255,0.95)');
+    flame.addColorStop(0.25, 'rgba(255,210,63,0.9)');
+    flame.addColorStop(0.6, 'rgba(255,94,0,0.65)');
+    flame.addColorStop(1, 'rgba(255,40,0,0)');
+    ctx.fillStyle = flame;
+    ctx.beginPath();
+    ctx.moveTo(-10, 4.5);
+    ctx.quadraticCurveTo(-11 - len*0.55, 2.2, -11 - len, 0);
+    ctx.quadraticCurveTo(-11 - len*0.55, -2.2, -10, -4.5);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Swept wings, behind the fuselage. Dark plating with a thin lit edge.
+  const wingFill = '#141B2C';
+  for (const s of [1, -1]) {
+    ctx.beginPath();
+    ctx.moveTo(3, 3.5*s);
+    ctx.lineTo(-5, 13*s);
+    ctx.lineTo(-10.5, 11.5*s);
+    ctx.lineTo(-7, 3.5*s);
+    ctx.closePath();
+    ctx.fillStyle = wingFill;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,245,255,0.75)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    // wingtip light
+    ctx.beginPath();
+    ctx.arc(-5.5, 12.6*s, 1.2, 0, Math.PI*2);
+    ctx.fillStyle = '#00F5FF';
+    ctx.fill();
+  }
+
+  // Fuselage: tapered hull with a vertical metallic gradient so it reads as a
+  // solid machined body instead of a flat triangle.
+  const hull = ctx.createLinearGradient(0, -5, 0, 5);
+  hull.addColorStop(0, '#3A4A66');
+  hull.addColorStop(0.45, '#1B2438');
+  hull.addColorStop(1, '#0B111E');
   ctx.beginPath();
-  ctx.moveTo(16, 0);
-  ctx.lineTo(-10, 9);
-  ctx.lineTo(-6, 0);
-  ctx.lineTo(-10, -9);
+  ctx.moveTo(18, 0);
+  ctx.lineTo(9, -2.8);
+  ctx.lineTo(-5, -4.6);
+  ctx.lineTo(-11, -3);
+  ctx.lineTo(-11, 3);
+  ctx.lineTo(-5, 4.6);
+  ctx.lineTo(9, 2.8);
   ctx.closePath();
-  ctx.fillStyle = '#0A1A2E';
+  ctx.fillStyle = hull;
   ctx.fill();
   ctx.strokeStyle = '#00F5FF';
-  ctx.lineWidth = 1.8;
+  ctx.lineWidth = 1.3;
   ctx.stroke();
+
+  // Twin engine nozzles
+  ctx.fillStyle = '#2A3550';
+  ctx.fillRect(-12.5, -3.6, 3, 2.6);
+  ctx.fillRect(-12.5, 1.0, 3, 2.6);
+  ctx.strokeStyle = 'rgba(0,245,255,0.5)';
+  ctx.lineWidth = 0.8;
+  ctx.strokeRect(-12.5, -3.6, 3, 2.6);
+  ctx.strokeRect(-12.5, 1.0, 3, 2.6);
+
+  // Cockpit canopy: glowing teardrop just behind the nose.
+  const canopy = ctx.createRadialGradient(6.5, 0, 0.4, 6.5, 0, 3.6);
+  canopy.addColorStop(0, '#EAFDFF');
+  canopy.addColorStop(0.35, '#7FF4FF');
+  canopy.addColorStop(1, 'rgba(0,180,220,0.12)');
   ctx.beginPath();
-  ctx.arc(4, 0, 3.5, 0, Math.PI*2);
-  ctx.fillStyle = '#00F5FF';
-  ctx.globalAlpha = 0.8;
+  ctx.ellipse(6.5, 0, 4.2, 2.1, 0, 0, Math.PI*2);
+  ctx.fillStyle = canopy;
   ctx.fill();
-  ctx.globalAlpha = 1;
-  if (player.thrust) {
-    ctx.beginPath();
-    ctx.moveTo(-10, 5);
-    ctx.lineTo(-18 - Math.random()*6, 0);
-    ctx.lineTo(-10, -5);
-    ctx.fillStyle = '#00F5FF';
-    ctx.globalAlpha = 0.7;
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  }
+
   ctx.restore();
 }
 
@@ -588,7 +754,21 @@ const asteroids = [];
 function spawnAsteroid(x, y, size, speedMult=1) {
   const angle = Math.random()*Math.PI*2;
   const speed = (0.6 + Math.random()*1.2) * speedMult * (kidMode ? 0.7 : 1);
-  asteroids.push({ x: x ?? Math.random()*W, y: y ?? Math.random()*H, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed, size, radius: size === 3 ? 42 : size === 2 ? 24 : 12, rot: Math.random()*Math.PI*2, rotSpeed: (Math.random()-0.5)*0.04, verts: generateAsteroidVerts(size) });
+  asteroids.push({ x: x ?? Math.random()*W, y: y ?? Math.random()*H, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed, size, radius: size === 3 ? 42 : size === 2 ? 24 : 12, rot: Math.random()*Math.PI*2, rotSpeed: (Math.random()-0.5)*0.04, verts: generateAsteroidVerts(size), craters: generateCraters(size) });
+}
+// Craters are fixed per asteroid in unit space (angle, distance from centre,
+// radius) so they tumble with the rock instead of swimming across it.
+function generateCraters(size) {
+  const n = 2 + size;
+  const craters = [];
+  for (let i = 0; i < n; i++) {
+    craters.push({
+      a: Math.random() * Math.PI * 2,
+      d: 0.15 + Math.random() * 0.55,
+      r: 0.10 + Math.random() * 0.16
+    });
+  }
+  return craters;
 }
 function generateAsteroidVerts(size) {
   const n = 7 + size;
@@ -610,11 +790,21 @@ function updateAsteroids() {
     if (a.y > H + a.radius) a.y = -a.radius;
   }
 }
+// Rock, not neon: a radial gradient fakes sunlight from the upper-left, a dark
+// outline separates it from the void, and per-asteroid craters add surface.
+// Deliberately kept below the bloom threshold so asteroids never glow — being
+// the one matte thing on screen is what makes them read as solid rock.
 function drawAsteroids() {
   for (const a of asteroids) {
     ctx.save();
     ctx.translate(a.x, a.y);
     ctx.rotate(a.rot);
+
+    const lit = ctx.createRadialGradient(-a.radius*0.45, -a.radius*0.45, a.radius*0.1, 0, 0, a.radius*1.15);
+    lit.addColorStop(0, '#585866');
+    lit.addColorStop(0.55, '#38383F');
+    lit.addColorStop(1, '#1B1B20');
+
     ctx.beginPath();
     a.verts.forEach((v,i) => {
       const x = Math.cos(v.a) * a.radius * v.r;
@@ -622,27 +812,40 @@ function drawAsteroids() {
       if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
     });
     ctx.closePath();
-    ctx.fillStyle = '#2A2A3A';
+    ctx.fillStyle = lit;
     ctx.fill();
-    ctx.strokeStyle = '#00FFCC';
-    ctx.lineWidth = 1.2;
-    ctx.globalAlpha = 0.7;
+    ctx.strokeStyle = 'rgba(12,12,16,0.9)';
+    ctx.lineWidth = 2;
     ctx.stroke();
-    ctx.globalAlpha = 0.15;
-    ctx.strokeStyle = '#00F5FF';
-    ctx.lineWidth = 4;
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+
+    // Craters: dark bowl plus a thin lit rim on the sun-facing side.
+    for (const c of a.craters) {
+      const cx = Math.cos(c.a) * c.d * a.radius;
+      const cy = Math.sin(c.a) * c.d * a.radius;
+      const cr = c.r * a.radius;
+      ctx.beginPath();
+      ctx.arc(cx, cy, cr, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(14,14,20,0.55)';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx, cy, cr, Math.PI*0.65, Math.PI*1.55);
+      ctx.strokeStyle = 'rgba(170,170,185,0.30)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
     ctx.restore();
   }
 }
 function splitAsteroid(a, idx) {
-  // Three-layer burst: a fast cyan shard core, a slower ember bloom, and a
-  // white flash ring. Layering different speeds and lifetimes is what stops a
-  // burst reading as a single uniform puff.
-  spawnParticles(a.x, a.y, 40 + a.size*22, '#00FFCC', 5.5, 38, 3);
-  spawnParticles(a.x, a.y, 18 + a.size*8, '#FF5E00', 2.6, 30, 2.4);
-  spawnParticles(a.x, a.y, 10 + a.size*4, '#FFFFFF', 7, 14, 2);
+  // Fireball, layered by temperature: fast white flash-sparks, a yellow core,
+  // an orange body, slow lingering deep-red embers, and matte grey rock
+  // shrapnel that doesn't bloom. Different speeds and lifetimes per layer are
+  // what stop the burst reading as a single uniform puff.
+  spawnParticles(a.x, a.y, 10 + a.size*5, '#FFFFFF', 7.5, 13, 2);
+  spawnParticles(a.x, a.y, 22 + a.size*12, '#FFD23F', 5, 30, 3);
+  spawnParticles(a.x, a.y, 20 + a.size*10, '#FF5E00', 3.4, 40, 3.2);
+  spawnParticles(a.x, a.y, 8 + a.size*5, '#C22800', 2.0, 55, 3.6);
+  spawnParticles(a.x, a.y, 8 + a.size*4, '#6A6A7A', 4.2, 34, 2.4);
   shake = Math.max(shake, 8 + a.size*4);
   flash = 0.35;
   hitStop = Math.max(hitStop, 1 + a.size * 1.2);
@@ -787,16 +990,18 @@ function checkCollisions() {
     }
   }
   if (player.invuln > 0) return;
-  const shielding = (keys['ShiftLeft']||keys['ShiftRight']||gamepad.buttons[5] || kidMode) && player.shield > 5;
-  for (const a of asteroids) {
+  const shielding = (shieldActive() || kidMode) && player.shield > 5;
+  // Shield-ramming an asteroid destroys it (full split, scores normally) at a
+  // fixed shield cost. One per frame: splitAsteroid mutates the array, so we
+  // handle the first hit and break rather than keep iterating stale indices.
+  for (let ai = asteroids.length - 1; ai >= 0; ai--) {
+    const a = asteroids[ai];
     if (Math.hypot(player.x-a.x, player.y-a.y) < a.radius + player.radius) {
       if (shielding) {
-        player.shield = Math.max(0, player.shield - 25);
+        player.shield = Math.max(0, player.shield - (8 + a.size * 5));
         spawnParticles(player.x, player.y, 15, '#3A7BFF', 4, 25, 3);
-        const dx = a.x - player.x, dy = a.y - player.y;
-        const d = Math.hypot(dx,dy)||1;
-        a.vx += dx/d * 2;
-        a.vy += dy/d * 2;
+        splitAsteroid(a, ai);
+        break;
       } else {
         playerHit();
         return;
@@ -841,9 +1046,11 @@ function checkCollisions() {
 }
 function playerHit() {
   lives--;
-  spawnParticles(player.x, player.y, 90, '#00F5FF', 7, 55, 4);
-  spawnParticles(player.x, player.y, 45, '#FF5E00', 5, 42, 3);
   spawnParticles(player.x, player.y, 30, '#FFFFFF', 9, 18, 2.5);
+  spawnParticles(player.x, player.y, 60, '#FFD23F', 7, 45, 3.6);
+  spawnParticles(player.x, player.y, 55, '#FF5E00', 5, 50, 3.4);
+  spawnParticles(player.x, player.y, 25, '#C22800', 2.5, 65, 4);
+  spawnParticles(player.x, player.y, 20, '#00F5FF', 6, 40, 2.5); // ship debris sparks
   shake = 25;
   flash = 0.7;
   hitStop = 8;
@@ -929,6 +1136,8 @@ function endGame() {
 function showMenu() {
   clearPendingTimers();
   waveTransition = false;
+  rebinding = null;
+  renderMenuScores();
   state = State.MENU;
   document.getElementById('menu').classList.remove('hidden');
   document.getElementById('gameover').classList.add('hidden');
@@ -979,7 +1188,7 @@ window.addEventListener('keydown', e => {
 });
 
 window.addEventListener('keydown', e => {
-  if (e.code === 'Escape' || e.code === 'KeyP') {
+  if (binds.pause.includes(e.code)) {
     if (state === State.PLAY) {
       state = State.PAUSE;
       document.getElementById('pause').classList.remove('hidden');
@@ -989,6 +1198,44 @@ window.addEventListener('keydown', e => {
     }
   }
 });
+
+// ---- Controls screen: rebindable keys ----
+const KEY_LABELS = { Space:'SPACE', Backspace:'BKSP', ShiftLeft:'SHIFT', ShiftRight:'R-SHIFT', Escape:'ESC', ControlLeft:'CTRL', ControlRight:'R-CTRL', AltLeft:'ALT', Tab:'TAB', Enter:'ENTER', ArrowUp:'UP', ArrowDown:'DOWN', ArrowLeft:'LEFT', ArrowRight:'RIGHT' };
+function keyLabel(code) {
+  return KEY_LABELS[code] || code.replace(/^(Key|Digit|Numpad)/, '').toUpperCase();
+}
+function renderBinds() {
+  const list = document.getElementById('bindList');
+  list.innerHTML = ACTIONS.map(([a, label]) =>
+    `<div class="bind-row"><span class="bind-name">${label}</span><span>` +
+    binds[a].map((c, i) => {
+      const active = rebinding && rebinding.action === a && rebinding.slot === i;
+      return `<button class="bindkey${active ? ' listening' : ''}" data-a="${a}" data-i="${i}">${active ? 'PRESS…' : keyLabel(c)}</button>`;
+    }).join('') + `</span></div>`
+  ).join('');
+  list.querySelectorAll('.bindkey').forEach(btn => {
+    btn.onclick = () => {
+      rebinding = { action: btn.dataset.a, slot: +btn.dataset.i };
+      renderBinds();
+    };
+  });
+}
+document.getElementById('btnResetBinds').onclick = () => {
+  for (const [a] of ACTIONS) binds[a] = [...DEFAULT_BINDS[a]];
+  saveBinds();
+  rebinding = null;
+  renderBinds();
+};
+
+// ---- Home screen leaderboard ----
+function renderMenuScores() {
+  const el = document.getElementById('menuScores');
+  el.innerHTML = highScores.length
+    ? highScores.slice(0, 5).map((s, i) => `<div class="hs-row"><span>#${i+1}</span><span>${s.toLocaleString()}</span></div>`).join('')
+    : '<div class="hs-row"><span>NO SCORES YET</span><span>—</span></div>';
+}
+renderMenuScores();
+renderBinds();
 
 function loop(now) {
   requestAnimationFrame(loop);

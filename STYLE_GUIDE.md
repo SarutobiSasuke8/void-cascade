@@ -27,23 +27,37 @@
 - Display / Logo: Orbitron (or any geometric futuristic sans) – weight 900, wide tracking
 - UI: same family, weight 700 for buttons, 400 for body
 
-## Ship Design
-- Sleek angular interceptor silhouette (pointed nose, swept wings, central cockpit glow)
-- Primary stroke: neon-cyan
-- Fill: near-black with subtle cyan rim light
-- Thruster: additive cyan + blue ribbon trails + occasional secondary particles
-- Optional skins: different accent colours (magenta, gold, emerald) for future unlocks
+## Ship Design (revised 2026-08-06)
+- Proper interceptor, not a cursor: tapered fuselage with a vertical metallic
+  gradient, swept wings with lit edges and wingtip lights, twin engine
+  nozzles, glowing teardrop cockpit canopy
+- Hull accents: neon-cyan edge light over dark steel
+- **Thruster: rocket fire, not energy.** White-hot core → yellow → orange →
+  red tail-off, both in the nozzle flame and the particle exhaust. (Supersedes
+  the original cyan-thruster rule by explicit decision.)
+- Optional skins: different accent colours for future unlocks
 
-## Asteroids
-- Irregular 7–11 sided polygons with randomised radius variation
-- Base fill dark grey, stroke energy cyan
-- On destruction: dual particle burst (cyan shards + ember orange) + screen shake proportional to size
+## Asteroids (revised 2026-08-06)
+- Real rock, not neon wireframe: irregular 7–11 sided polygons, radial-gradient
+  shading lit from upper-left, dark outline, per-asteroid craters with lit rims
+- Asteroids are deliberately the one matte, non-glowing thing on screen — they
+  must stay below the bloom threshold, which is what sells them as solid
+- On destruction: layered fireball (white flash sparks, yellow core, orange
+  body, lingering deep-red embers) plus matte grey rock shrapnel
 - Large → 2 medium, medium → 2 small
+
+## Shield (added 2026-08-06)
+- Default key: Backspace (rebindable). Everyone starts each life with 60 shield
+  (kid mode 100); pickups refill
+- Drains ~20/sec while held; HUD bar labelled SHIELD shows remaining charge
+- Ramming an asteroid with the shield up destroys it (full split, normal score)
+  at a flat cost of 8 + 5×size shield
 
 ## Rift Stalkers
 - More aggressive, slightly bulkier silhouette with magenta energy core
 - Seek + fire behaviour (different patterns can be layered later: strafe, charge, shotgun)
-- Magenta trails and bullets
+- Magenta trails and bullets (enemy energy stays magenta — only the player's
+  exhaust and rock explosions moved to the fire palette)
 
 ## Particle Systems (priority juice)
 1. Thruster ribbons (continuous while thrusting)
@@ -89,6 +103,9 @@ real; drawing it again is both slower and worse looking.
 ## UI / Menus
 - Minimal neon frames
 - Large logo with animated gradient shimmer
+- Home screen shows a TOP PILOTS leaderboard (top 5) directly under the logo
+- Controls screen lists every action with two rebindable key slots; click a key
+  chip, press the new key. Persisted in localStorage, reset button provided
 - High-contrast buttons with hover glow
 - High-score table clean and ranked
 - Kid Mode toggle clearly visible
