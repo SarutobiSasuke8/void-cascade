@@ -15,8 +15,17 @@ Cinematic deep-space intensity mixed with pure arcade fun. Dark cosmic voids lit
 ## Play Now (Browser)
 
 Open `play/index.html` in a modern browser (Chrome / Firefox / Edge recommended).
+Works straight off the filesystem, no build step and no server required.
 
 Full keyboard + gamepad support. Touch-friendly controls planned.
+
+**Rendering:** gameplay draws into an offscreen 2D canvas, which is then pushed
+through a WebGL post-processing chain (`play/postfx.js`) for bloom, chromatic
+aberration, vignette and tone mapping before hitting the screen. Zero external
+dependencies. If WebGL is unavailable the game still runs, unprocessed.
+
+The simulation is frame-rate independent, so it plays identically at 60, 120 and
+144Hz.
 
 ---
 

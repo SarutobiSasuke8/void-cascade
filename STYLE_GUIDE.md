@@ -56,9 +56,27 @@
 All particles use additive blending (`globalCompositeOperation = 'lighter'`) for the premium glow look.
 
 ## Post-Processing
+
+Implemented in `play/postfx.js` as a WebGL pass over the 2D game canvas. No
+external dependencies; falls back to an unprocessed blit if WebGL is missing.
+
 - Screen shake on every significant hit/destruction
-- Full-screen white flash (short, decaying) on big events
-- Optional future: bloom pass, chromatic aberration at edges, subtle CRT scanlines toggle
+- Hit-stop (brief simulation freeze) scaled to impact size
+- Full-screen white flash (short, decaying) on big events, applied in-shader
+- **Bloom** — soft-knee bright pass at `0.32`, two blurred octaves (half and
+  quarter res) composited additively
+- **Chromatic aberration** — radial, scales with distance from centre and with
+  current screen shake
+- **Vignette**
+- **Tone mapping** — extended Reinhard with a white point. Deliberately *not* a
+  plain `x/(x+k)` curve: that has a slope above 1.0 at black and lifts the
+  background out of near-black, destroying the contrast the neon depends on.
+  This curve has slope exactly 1.0 at zero, so the void stays the void.
+- Still optional/future: subtle CRT scanlines toggle
+
+**Particles:** one filled arc each, batched by colour. Do not re-add the old
+core-plus-halo pair. The halo was faking a glow the bloom pass now produces for
+real; drawing it again is both slower and worse looking.
 
 ## UI / Menus
 - Minimal neon frames

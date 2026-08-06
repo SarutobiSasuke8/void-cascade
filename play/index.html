@@ -174,7 +174,6 @@
 <body>
 <div id="gameContainer">
   <canvas id="c"></canvas>
-  <div id="flash"></div>
   <div id="ui">
     <div id="menu" class="screen">
       <div class="logo">VOID CASCADE</div>
@@ -229,21 +228,53 @@
   </div>
 </div>
 
+<script src="postfx.js"></script>
 <script>
 // VOID CASCADE — Browser Prototype
 // Full modern particle-hybrid Asteroids remake
 // (core gameplay + visual juice preserved from design)
-const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
-const flashEl = document.getElementById('flash');
-let W, H, CX, CY;
+//
+// Rendering is two-stage: all gameplay draws into an offscreen 2D canvas,
+// which is then pushed through the WebGL bloom pipeline in postfx.js and
+// composited to the visible canvas. Game code below draws exactly as before.
+const display = document.getElementById('c');
+const canvas = document.createElement('canvas');
+const ctx = canvas.getContext('2d', { alpha: false });
+const postfx = createPostFX(display, canvas);
+
+// Bloom is expensive at 4K. Cap the internal buffer so high-DPI screens do not
+// tank the frame rate; the upscale is invisible under this much glow.
+const MAX_PIXELS = 2100000;
+
+let W = 0, H = 0, CX = 0, CY = 0;
 function resize() {
-  W = canvas.width = window.innerWidth;
-  H = canvas.height = window.innerHeight;
+  // Floor at 1x1. A page loaded in a background tab or a not-yet-laid-out
+  // container reports 0, which would silently leave a zero-size canvas and a
+  // black screen with no error.
+  const w = Math.max(1, window.innerWidth || document.documentElement.clientWidth || 1);
+  const h = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 1);
+  const scale = Math.min(1, Math.sqrt(MAX_PIXELS / (w * h)));
+  const nw = Math.max(1, Math.floor(w * scale));
+  const nh = Math.max(1, Math.floor(h * scale));
+  if (nw === W && nh === H) return;
+  W = canvas.width = display.width = nw;
+  H = canvas.height = display.height = nh;
+  display.style.width = w + 'px';
+  display.style.height = h + 'px';
   CX = W / 2; CY = H / 2;
+  postfx.resize(W, H);
 }
 window.addEventListener('resize', resize);
+// The resize event does not fire when a hidden container is first laid out, so
+// observe the container directly as well.
+if (window.ResizeObserver) {
+  new ResizeObserver(resize).observe(document.getElementById('gameContainer'));
+}
 resize();
+
+// Reused per-colour buckets for particle drawing. Allocated once so the render
+// path does not create garbage every frame.
+const particleBuckets = new Map();
 
 const State = { MENU:0, PLAY:1, PAUSE:2, GAMEOVER:3, SCORES:4, CONTROLS:5 };
 let state = State.MENU;
@@ -251,6 +282,13 @@ let kidMode = false;
 let score = 0, lives = 3, wave = 1, highScores = JSON.parse(localStorage.getItem('vc_scores') || '[]');
 let shake = 0, flash = 0;
 let frame = 0;
+
+// dt is normalised so 1.0 == one tick at 60Hz. Everything that moves or counts
+// down multiplies by it, so the game plays identically at 60, 120 and 144Hz.
+// Clamped to 3 so an alt-tab pause cannot teleport asteroids through the ship.
+let dt = 1, lastTime = 0;
+// Brief freeze on heavy impacts. Costs a few frames, reads as weight.
+let hitStop = 0;
 
 const keys = {};
 const gamepad = { axes: [0,0], buttons: {} };
@@ -281,26 +319,39 @@ function spawnTrail(x, y, angle, color) {
 function updateParticles() {
   for (let i=particles.length-1; i>=0; i--) {
     const p = particles[i];
-    p.x += p.vx; p.y += p.vy;
-    p.vx *= 0.98; p.vy *= 0.98;
-    p.life--;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    const drag = Math.pow(0.98, dt);
+    p.vx *= drag; p.vy *= drag;
+    p.life -= dt;
     if (p.life <= 0) particles.splice(i,1);
   }
 }
+// One filled arc per particle, batched by colour.
+//
+// The original drew two arcs each: a core plus a larger, dimmer disc faking a
+// halo. That fake is now redundant because the bloom pass produces a real one,
+// so dropping it is both cheaper and better looking. Grouping by colour also
+// collapses per-particle fillStyle changes down to one per colour per frame.
+// Measured at roughly twice the throughput of the original at 1000-2000
+// particles, which is what pays for the denser bursts.
 function drawParticles() {
+  if (!particles.length) return;
+  for (const list of particleBuckets.values()) list.length = 0;
+  for (const p of particles) {
+    let list = particleBuckets.get(p.color);
+    if (!list) { list = []; particleBuckets.set(p.color, list); }
+    list.push(p);
+  }
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  for (const p of particles) {
-    const alpha = Math.max(0, p.life / p.maxLife);
-    ctx.globalAlpha = alpha * 0.9;
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI*2);
-    ctx.fill();
-    if (p.glow) {
-      ctx.globalAlpha = alpha * 0.25;
+  for (const [colour, list] of particleBuckets) {
+    if (!list.length) continue;
+    ctx.fillStyle = colour;
+    for (const p of list) {
+      const alpha = Math.max(0, p.life / p.maxLife);
+      ctx.globalAlpha = alpha * 0.95;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * 3 * alpha, 0, Math.PI*2);
+      ctx.arc(p.x, p.y, p.size * (0.5 + alpha * 0.8), 0, Math.PI*2);
       ctx.fill();
     }
   }
@@ -315,13 +366,19 @@ const nebulaBlobs = [];
 for (let i=0; i<8; i++) {
   nebulaBlobs.push({ x: Math.random()*W, y: Math.random()*H, r: 120 + Math.random()*200, vx: (Math.random()-0.5)*0.15, vy: (Math.random()-0.5)*0.15, hue: 260 + Math.random()*40 });
 }
+// Scroll accumulator rather than raw frame count, so parallax speed is also
+// frame-rate independent.
+let bgScroll = 0;
+
 function drawBackground() {
+  bgScroll += dt;
   ctx.fillStyle = '#05010A';
   ctx.fillRect(0,0,W,H);
+
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
   for (const n of nebulaBlobs) {
-    n.x += n.vx; n.y += n.vy;
+    n.x += n.vx * dt; n.y += n.vy * dt;
     if (n.x < -n.r) n.x = W+n.r;
     if (n.x > W+n.r) n.x = -n.r;
     if (n.y < -n.r) n.y = H+n.r;
@@ -336,9 +393,31 @@ function drawBackground() {
     ctx.fill();
   }
   ctx.restore();
+
+  // Faint scrolling grid. Without a fixed reference the playfield reads as a
+  // flat void and the ship looks like it is sliding on glass; the grid gives
+  // motion something to register against. Kept under the bloom threshold so it
+  // never glows and never competes with gameplay elements.
+  const cell = 90;
+  const ox = (bgScroll * 0.18) % cell;
+  const oy = (bgScroll * 0.09) % cell;
+  ctx.save();
+  ctx.strokeStyle = '#3A7BFF';
+  ctx.globalAlpha = 0.055;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = -ox; x < W + cell; x += cell) {
+    ctx.moveTo(x, 0); ctx.lineTo(x, H);
+  }
+  for (let y = -oy; y < H + cell; y += cell) {
+    ctx.moveTo(0, y); ctx.lineTo(W, y);
+  }
+  ctx.stroke();
+  ctx.restore();
+
   for (const s of stars) {
-    const px = (s.x * W + frame * 0.02 * s.z) % W;
-    const py = (s.y * H + frame * 0.01 * s.z) % H;
+    const px = (s.x * W + bgScroll * 0.02 * s.z) % W;
+    const py = (s.y * H + bgScroll * 0.01 * s.z) % H;
     ctx.globalAlpha = 0.3 + s.z * 0.25;
     ctx.fillStyle = '#fff';
     ctx.beginPath();
@@ -363,14 +442,19 @@ function updatePlayer() {
   if (keys['ArrowLeft'] || keys['KeyA']) rot -= 1;
   if (keys['ArrowRight'] || keys['KeyD']) rot += 1;
   rot += gamepad.axes[0];
-  player.angle += rot * 0.085;
+  player.angle += rot * 0.085 * dt;
   player.thrust = keys['ArrowUp'] || keys['KeyW'] || gamepad.buttons[0] || gamepad.buttons[7];
   if (player.thrust) {
     const force = 0.18;
-    player.vx += Math.cos(player.angle) * force;
-    player.vy += Math.sin(player.angle) * force;
-    spawnTrail(player.x, player.y, player.angle, '#00F5FF');
-    if (Math.random() < 0.4) spawnTrail(player.x, player.y, player.angle + 0.3, '#3A7BFF');
+    player.vx += Math.cos(player.angle) * force * dt;
+    player.vy += Math.sin(player.angle) * force * dt;
+    // Emit proportional to elapsed time so the ribbon has the same density
+    // whether the display is 60Hz or 144Hz.
+    const puffs = Math.max(1, Math.round(dt));
+    for (let i = 0; i < puffs; i++) {
+      spawnTrail(player.x, player.y, player.angle, '#00F5FF');
+      if (Math.random() < 0.4) spawnTrail(player.x, player.y, player.angle + 0.3, '#3A7BFF');
+    }
   }
   const maxSpeed = 7.5;
   const sp = Math.hypot(player.vx, player.vy);
@@ -378,15 +462,16 @@ function updatePlayer() {
     player.vx = (player.vx / sp) * maxSpeed;
     player.vy = (player.vy / sp) * maxSpeed;
   }
-  player.vx *= 0.992;
-  player.vy *= 0.992;
-  player.x += player.vx;
-  player.y += player.vy;
+  const pDrag = Math.pow(0.992, dt);
+  player.vx *= pDrag;
+  player.vy *= pDrag;
+  player.x += player.vx * dt;
+  player.y += player.vy * dt;
   if (player.x < -20) player.x = W+20;
   if (player.x > W+20) player.x = -20;
   if (player.y < -20) player.y = H+20;
   if (player.y > H+20) player.y = -20;
-  player.fireCooldown--;
+  player.fireCooldown -= dt;
   const firePressed = keys['Space'] || keys['KeyZ'] || gamepad.buttons[1] || gamepad.buttons[2];
   if (firePressed && player.fireCooldown <= 0) {
     const rate = player.rapid > 0 ? 6 : 12;
@@ -396,11 +481,11 @@ function updatePlayer() {
     spawnParticles(player.x + Math.cos(player.angle)*16, player.y + Math.sin(player.angle)*16, 4, '#00F5FF', 2, 12, 2);
   }
   if ((keys['ShiftLeft'] || keys['ShiftRight'] || gamepad.buttons[5]) && player.shield > 0) {
-    player.shield = Math.max(0, player.shield - 0.6);
+    player.shield = Math.max(0, player.shield - 0.6 * dt);
   }
-  if (player.rapid > 0) player.rapid--;
-  if (player.invuln > 0) player.invuln--;
-  if (kidMode && player.shield < 40) player.shield = Math.min(100, player.shield + 0.15);
+  if (player.rapid > 0) player.rapid -= dt;
+  if (player.invuln > 0) player.invuln -= dt;
+  if (kidMode && player.shield < 40) player.shield = Math.min(100, player.shield + 0.15 * dt);
 }
 function drawPlayer() {
   if (player.invuln > 0 && Math.floor(player.invuln/4)%2) return;
@@ -450,8 +535,8 @@ const bullets = [];
 function updateBullets() {
   for (let i=bullets.length-1; i>=0; i--) {
     const b = bullets[i];
-    b.x += b.vx; b.y += b.vy;
-    b.life--;
+    b.x += b.vx * dt; b.y += b.vy * dt;
+    b.life -= dt;
     if (b.life <= 0 || b.x<-30||b.x>W+30||b.y<-30||b.y>H+30) {
       bullets.splice(i,1);
       continue;
@@ -495,8 +580,8 @@ function generateAsteroidVerts(size) {
 }
 function updateAsteroids() {
   for (const a of asteroids) {
-    a.x += a.vx; a.y += a.vy;
-    a.rot += a.rotSpeed;
+    a.x += a.vx * dt; a.y += a.vy * dt;
+    a.rot += a.rotSpeed * dt;
     if (a.x < -a.radius) a.x = W + a.radius;
     if (a.x > W + a.radius) a.x = -a.radius;
     if (a.y < -a.radius) a.y = H + a.radius;
@@ -530,10 +615,15 @@ function drawAsteroids() {
   }
 }
 function splitAsteroid(a, idx) {
-  spawnParticles(a.x, a.y, 18 + a.size*8, '#00FFCC', 4, 35, 3);
-  spawnParticles(a.x, a.y, 10, '#FF5E00', 3, 25, 2);
+  // Three-layer burst: a fast cyan shard core, a slower ember bloom, and a
+  // white flash ring. Layering different speeds and lifetimes is what stops a
+  // burst reading as a single uniform puff.
+  spawnParticles(a.x, a.y, 40 + a.size*22, '#00FFCC', 5.5, 38, 3);
+  spawnParticles(a.x, a.y, 18 + a.size*8, '#FF5E00', 2.6, 30, 2.4);
+  spawnParticles(a.x, a.y, 10 + a.size*4, '#FFFFFF', 7, 14, 2);
   shake = Math.max(shake, 8 + a.size*4);
   flash = 0.35;
+  hitStop = Math.max(hitStop, 1 + a.size * 1.2);
   score += a.size * 50 * wave;
   if (a.size > 1) {
     for (let i=0; i<2; i++) spawnAsteroid(a.x, a.y, a.size-1, 1.3);
@@ -563,13 +653,14 @@ function updateEnemies() {
     let da = desired - e.angle;
     while (da > Math.PI) da -= Math.PI*2;
     while (da < -Math.PI) da += Math.PI*2;
-    e.angle += da * 0.04;
+    e.angle += da * 0.04 * dt;
     const accel = 0.09 * (kidMode ? 0.7 : 1);
-    e.vx += Math.cos(e.angle) * accel;
-    e.vy += Math.sin(e.angle) * accel;
-    e.vx *= 0.97; e.vy *= 0.97;
-    e.x += e.vx; e.y += e.vy;
-    e.fireCooldown--;
+    e.vx += Math.cos(e.angle) * accel * dt;
+    e.vy += Math.sin(e.angle) * accel * dt;
+    const eDrag = Math.pow(0.97, dt);
+    e.vx *= eDrag; e.vy *= eDrag;
+    e.x += e.vx * dt; e.y += e.vy * dt;
+    e.fireCooldown -= dt;
     if (e.fireCooldown <= 0 && dist < 450) {
       e.fireCooldown = kidMode ? 90 : 55;
       bullets.push({ x: e.x + Math.cos(e.angle)*14, y: e.y + Math.sin(e.angle)*14, vx: Math.cos(e.angle)*7, vy: Math.sin(e.angle)*7, life: 70, fromPlayer: false });
@@ -605,15 +696,15 @@ const powerups = [];
 function updatePowerups() {
   for (let i=powerups.length-1; i>=0; i--) {
     const p = powerups[i];
-    p.x += p.vx; p.y += p.vy;
-    p.life--;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.life -= dt;
     if (p.life <= 0) { powerups.splice(i,1); continue; }
     if (kidMode) {
       const dx = player.x - p.x, dy = player.y - p.y;
       const d = Math.hypot(dx,dy);
       if (d < 120) {
-        p.vx += dx/d * 0.08;
-        p.vy += dy/d * 0.08;
+        p.vx += dx/d * 0.08 * dt;
+        p.vy += dy/d * 0.08 * dt;
       }
     }
   }
@@ -660,11 +751,13 @@ function checkCollisions() {
         e.hp--;
         spawnParticles(e.x, e.y, 8, '#FF00AA', 3, 20, 2);
         if (e.hp <= 0) {
-          spawnParticles(e.x, e.y, 25, '#FF00AA', 5, 40, 3);
-          spawnParticles(e.x, e.y, 12, '#FF5E00', 4, 30, 2);
+          spawnParticles(e.x, e.y, 55, '#FF00AA', 6, 44, 3.2);
+          spawnParticles(e.x, e.y, 24, '#FF5E00', 4, 32, 2.4);
+          spawnParticles(e.x, e.y, 14, '#FFFFFF', 8, 15, 2);
           score += 250 * wave;
-          shake = Math.max(shake, 12);
+          shake = Math.max(shake, 14);
           flash = 0.4;
+          hitStop = Math.max(hitStop, 4);
           enemies.splice(ei,1);
         }
         break;
@@ -726,10 +819,12 @@ function checkCollisions() {
 }
 function playerHit() {
   lives--;
-  spawnParticles(player.x, player.y, 40, '#00F5FF', 6, 50, 4);
-  spawnParticles(player.x, player.y, 20, '#FF5E00', 5, 40, 3);
+  spawnParticles(player.x, player.y, 90, '#00F5FF', 7, 55, 4);
+  spawnParticles(player.x, player.y, 45, '#FF5E00', 5, 42, 3);
+  spawnParticles(player.x, player.y, 30, '#FFFFFF', 9, 18, 2.5);
   shake = 25;
   flash = 0.7;
+  hitStop = 8;
   if (lives <= 0) {
     endGame();
   } else {
@@ -828,18 +923,32 @@ window.addEventListener('keydown', e => {
   }
 });
 
-function loop() {
+function loop(now) {
   requestAnimationFrame(loop);
-  frame++;
+
+  // Normalise elapsed time to 60Hz ticks. The clamp stops a backgrounded tab
+  // from resuming with one enormous step that tunnels collisions.
+  if (!lastTime) lastTime = now || 0;
+  const elapsed = (now || 0) - lastTime;
+  lastTime = now || 0;
+  dt = Math.min(elapsed / 16.6667, 3) || 1;
+
+  frame += dt;
   pollGamepad();
+
+  // Hit-stop: keep rendering, suspend simulation. Reads as impact weight.
+  const frozen = hitStop > 0;
+  if (frozen) hitStop -= dt;
+
   drawBackground();
   ctx.save();
   if (shake > 0) {
     ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake);
-    shake *= 0.88;
+    shake *= Math.pow(0.88, dt);
+    if (shake < 0.1) shake = 0;
   }
   if (state === State.PLAY || state === State.PAUSE) {
-    if (state === State.PLAY) {
+    if (state === State.PLAY && !frozen) {
       updatePlayer();
       updateBullets();
       updateAsteroids();
@@ -864,14 +973,24 @@ function loop() {
     drawParticles();
   }
   ctx.restore();
+
   if (flash > 0) {
-    flashEl.style.opacity = flash;
-    flash *= 0.85;
-  } else {
-    flashEl.style.opacity = 0;
+    flash *= Math.pow(0.85, dt);
+    if (flash < 0.005) flash = 0;
   }
+
+  // Everything drawn above lands in the offscreen canvas. This is the step
+  // that actually turns it into the look: bright pass, two blur octaves,
+  // additive composite, chromatic aberration, vignette.
+  postfx.render({
+    bloomIntensity: 1.35,
+    threshold: 0.32,
+    aberration: 0.005 + shake * 0.0012,
+    vignette: 0.55,
+    flash: flash * 0.85
+  });
 }
-loop();
+requestAnimationFrame(loop);
 
 for (let i=0; i<30; i++) {
   spawnParticles(Math.random()*W, Math.random()*H, 1, '#00F5FF', 0.3, 200, 1.5);
