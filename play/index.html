@@ -48,6 +48,11 @@
     pointer-events: auto;
     transition: opacity 0.4s ease;
   }
+  #menu {
+    background:
+      radial-gradient(ellipse at center, rgba(5,1,10,0.10) 0%, rgba(5,1,10,0.42) 58%, rgba(5,1,10,0.78) 100%),
+      url('../assets/backgrounds/menu_home.png') center / cover no-repeat;
+  }
   .screen.hidden { opacity: 0; pointer-events: none; }
   .logo {
     font-size: clamp(2.5rem, 8vw, 5.5rem);
@@ -61,6 +66,19 @@
     animation: shimmer 4s linear infinite;
     text-shadow: 0 0 40px rgba(0,245,255,0.5);
     margin-bottom: 0.3em;
+  }
+  #menu .logo {
+    width: min(72vw, 560px);
+    margin-bottom: 0.15rem;
+    background: none;
+    animation: none;
+    text-shadow: none;
+  }
+  #menu .logo img {
+    display: block;
+    width: 100%;
+    height: auto;
+    filter: drop-shadow(0 0 22px rgba(0, 245, 255, 0.25));
   }
   @keyframes shimmer {
     to { background-position: 200% center; }
@@ -260,7 +278,7 @@
   <div id="fxLabel"></div>
   <div id="ui">
     <div id="menu" class="screen">
-      <div class="logo">VOID CASCADE</div>
+      <div class="logo"><img src="../assets/ui/void_cascade_banner.png" alt="VOID CASCADE"></div>
       <div class="tagline">SHATTER THE VOID</div>
       <div class="menu-board">
         <div class="menu-board-title">TOP PILOTS</div>
@@ -330,6 +348,45 @@ const display = document.getElementById('c');
 const canvas = document.createElement('canvas');
 const ctx = canvas.getContext('2d', { alpha: false });
 const postfx = createPostFX(display, canvas);
+
+// Generated art is intentionally optional: the procedural renderers remain a
+// graceful fallback if a local browser blocks image loading from file://.
+const SPRITES = {
+  player: new Image(),
+  asteroid: new Image(),
+  riftStalker: new Image(),
+  shieldPickup: new Image(),
+  rapidPickup: new Image()
+};
+SPRITES.player.src = '../assets/ships/player_default.png';
+SPRITES.asteroid.src = '../assets/asteroids/large/asteroid_01.png';
+SPRITES.riftStalker.src = '../assets/enemies/rift_stalker_01.png';
+SPRITES.shieldPickup.src = '../assets/powerups/shield_charge.png';
+SPRITES.rapidPickup.src = '../assets/powerups/rapid_fire.png';
+const spriteSafety = new WeakMap();
+function spriteReady(sprite) {
+  if (!sprite.complete || sprite.naturalWidth <= 0) return false;
+  // The local server is the supported playable route. Its assets are same
+  // origin, so use them directly rather than falling back to the old Canvas
+  // drawings. Only direct file:// launches need the taint-safety probe below.
+  if (location.protocol !== 'file:') return true;
+  if (spriteSafety.has(sprite)) return spriteSafety.get(sprite);
+  // Canvas images loaded from a file URL can be cross-origin in some embedded
+  // previews. Probe a disposable canvas first so they never taint the gameplay
+  // source canvas and halt the WebGL post-processing frame.
+  const probe = document.createElement('canvas');
+  probe.width = probe.height = 1;
+  try {
+    const probeCtx = probe.getContext('2d');
+    probeCtx.drawImage(sprite, 0, 0, 1, 1);
+    probeCtx.getImageData(0, 0, 1, 1);
+    spriteSafety.set(sprite, true);
+  } catch (error) {
+    spriteSafety.set(sprite, false);
+    console.warn('Sprite disabled because this preview cannot safely upload it:', sprite.src, error);
+  }
+  return spriteSafety.get(sprite);
+}
 
 // Bloom is expensive at 4K. Cap the internal buffer so high-DPI screens do not
 // tank the frame rate; the upscale is invisible under this much glow.
@@ -419,7 +476,7 @@ const DEFAULT_BINDS = {
   right:  ['ArrowRight', 'KeyD'],
   thrust: ['ArrowUp', 'KeyW'],
   fire:   ['Space', 'KeyZ'],
-  shield: ['Backspace', 'ShiftLeft'],
+  shield: ['ArrowDown', 'ShiftLeft'],
   pause:  ['Escape', 'KeyP']
 };
 let binds;
@@ -431,6 +488,12 @@ for (const [a] of ACTIONS) {
     binds = binds || {};
     binds[a] = [...DEFAULT_BINDS[a]];
   }
+}
+// Move the previous untouched default to Down Arrow without overriding a
+// player's deliberate custom key binding.
+if (binds.shield[0] === 'Backspace' && binds.shield[1] === 'ShiftLeft') {
+  binds.shield[0] = 'ArrowDown';
+  saveBinds();
 }
 function saveBinds() { localStorage.setItem('vc_binds', JSON.stringify(binds)); }
 function down(action) { return binds[action].some(c => keys[c]); }
@@ -856,6 +919,15 @@ function drawPlayer() {
     ctx.fill();
   }
 
+  if (spriteReady(SPRITES.player)) {
+    // The generated interceptor is authored nose-right, matching the game's
+    // local +X heading. Thruster flame and shield remain procedural above it.
+    const size = 58;
+    ctx.drawImage(SPRITES.player, -size / 2, -size / 2, size, size);
+    ctx.restore();
+    return;
+  }
+
   // Swept wings, behind the fuselage. Dark plating with a thin lit edge.
   const wingFill = '#141B2C';
   for (const s of [1, -1]) {
@@ -1001,6 +1073,15 @@ function drawAsteroids() {
     ctx.translate(a.x, a.y);
     ctx.rotate(a.rot);
 
+    if (spriteReady(SPRITES.asteroid)) {
+      // One master remains legible across the three gameplay sizes; its matte
+      // pixels stay beneath the bloom threshold unlike the interactive neon.
+      const size = a.radius * 2.45;
+      ctx.drawImage(SPRITES.asteroid, -size / 2, -size / 2, size, size);
+      ctx.restore();
+      continue;
+    }
+
     const lit = ctx.createRadialGradient(-a.radius*0.45, -a.radius*0.45, a.radius*0.1, 0, 0, a.radius*1.15);
     lit.addColorStop(0, '#585866');
     lit.addColorStop(0.55, '#38383F');
@@ -1110,6 +1191,16 @@ function drawEnemies() {
 
     const pulse = 0.65 + 0.35 * Math.sin(frame * 0.18 + e.seed);
 
+    if (spriteReady(SPRITES.riftStalker)) {
+      // The generated ship faces right, matching the simulation's +X heading.
+      // A slight pulse gives its magenta core life without baking another glow.
+      const size = 48;
+      ctx.globalAlpha = 0.9 + pulse * 0.1;
+      ctx.drawImage(SPRITES.riftStalker, -size / 2, -size / 2, size, size);
+      ctx.restore();
+      continue;
+    }
+
     // Manta hull: swept-back curved wings with a rear notch.
     const hull = ctx.createLinearGradient(0, -12, 0, 12);
     hull.addColorStop(0, '#2A1030');
@@ -1171,8 +1262,23 @@ function drawPowerups() {
   for (const p of powerups) {
     const pulse = 0.7 + Math.sin(frame*0.15)*0.3;
     ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
     ctx.translate(p.x, p.y);
+    const sprite = p.type === 'shield' ? SPRITES.shieldPickup : SPRITES.rapidPickup;
+    if (spriteReady(sprite)) {
+      const size = 52;
+      ctx.globalAlpha = 0.78 + pulse * 0.22;
+      ctx.drawImage(sprite, -size / 2, -size / 2, size, size);
+      // Retain a small procedural aura to make the collectible pulse in play.
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.16 + pulse * 0.12;
+      ctx.fillStyle = p.type === 'shield' ? '#3A7BFF' : '#00F5FF';
+      ctx.beginPath();
+      ctx.arc(0, 0, 18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      continue;
+    }
+    ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = p.type === 'shield' ? '#3A7BFF' : '#00F5FF';
     ctx.globalAlpha = pulse;
     ctx.beginPath();
