@@ -535,7 +535,13 @@ const AudioFX = (() => {
   let ac = null, master, sfx, musGain;
   let noiseBuf, thrustGain, thrustFilter;
   let muted = localStorage.getItem('vc_muted') === '1';
-  let musicOn = false, schedTimer = null, nextNoteTime = 0, step = 0;
+  let musicOn = false;
+
+  // Theme music: a real track routed through the same master/mute graph as
+  // the sound effects rather than the old procedural synth loop.
+  const musicEl = new Audio('../assets/audio/void_cascade_theme.mp3');
+  musicEl.loop = true;
+  musicEl.preload = 'auto';
 
   function init() {
     if (ac) return;
@@ -547,6 +553,7 @@ const AudioFX = (() => {
     master.connect(ac.destination);
     sfx = ac.createGain(); sfx.gain.value = 0.55; sfx.connect(master);
     musGain = ac.createGain(); musGain.gain.value = 0; musGain.connect(master);
+    ac.createMediaElementSource(musicEl).connect(musGain);
 
     // one second of white noise, reused by every noise-based sound
     noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
@@ -562,8 +569,6 @@ const AudioFX = (() => {
     thrustGain = ac.createGain(); thrustGain.gain.value = 0;
     src.connect(thrustFilter); thrustFilter.connect(thrustGain); thrustGain.connect(sfx);
     src.start();
-
-    startScheduler();
   }
   function resume() { if (ac && ac.state === 'suspended') ac.resume(); }
 
@@ -590,34 +595,6 @@ const AudioFX = (() => {
     s.start(t); s.stop(t + dur + 0.05);
   }
 
-  // ---- music: dark 4-bar synth loop (Am F C G), 8th-note lookahead scheduler
-  const ROOTS = [55, 43.65, 65.41, 49];
-  const EIGHTH = 0.29;
-  function scheduleStep(s, t) {
-    const root = ROOTS[Math.floor(s / 8) % 4];
-    if (s % 2 === 0) osc('triangle', root, root, t, 0.26, 0.5, musGain);       // bass pulse
-    const arp = [2, 3, 4, 6, 4, 3][s % 6];
-    osc('sine', root * arp * 2, root * arp * 2, t, 0.14, 0.10, musGain);       // arpeggio
-    if (s % 4 === 2) {                                                          // soft tick
-      const src = ac.createBufferSource(); src.buffer = noiseBuf;
-      const f = ac.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 5000;
-      const g = ac.createGain(); env(g, t, 0.002, 0.05, 0.03);
-      src.connect(f); f.connect(g); g.connect(musGain);
-      src.start(t); src.stop(t + 0.06);
-    }
-  }
-  function startScheduler() {
-    nextNoteTime = ac.currentTime + 0.1;
-    schedTimer = setInterval(() => {
-      if (!musicOn) { nextNoteTime = ac.currentTime + 0.1; return; }
-      while (nextNoteTime < ac.currentTime + 0.2) {
-        scheduleStep(step, nextNoteTime);
-        step = (step + 1) % 32;
-        nextNoteTime += EIGHTH;
-      }
-    }, 60);
-  }
-
   let lastMusic = null;
   return {
     init, resume,
@@ -632,6 +609,12 @@ const AudioFX = (() => {
       if (!ac || on === lastMusic) return;
       lastMusic = on; musicOn = on;
       musGain.gain.setTargetAtTime(on ? 0.42 : 0, ac.currentTime, on ? 0.6 : 0.25);
+      if (on) musicEl.play().catch(() => {}); else musicEl.pause();
+    },
+    restartMusic() {
+      if (!ac) return;
+      musicEl.currentTime = 0;
+      if (musicOn) musicEl.play().catch(() => {});
     },
     setThrust(on) {
       if (!ac) return;
@@ -1465,6 +1448,7 @@ function startGame() {
   resetPlayer();
   startWave();
   state = State.PLAY;
+  AudioFX.restartMusic();
   document.getElementById('menu').classList.add('hidden');
   document.getElementById('gameover').classList.add('hidden');
   document.getElementById('pause').classList.add('hidden');
@@ -1635,7 +1619,7 @@ function loop(now) {
 
   frame += dt;
   pollGamepad();
-  AudioFX.setMusic(state === State.PLAY);
+  AudioFX.setMusic(state !== State.GAMEOVER);
   AudioFX.setThrust(state === State.PLAY && player.thrust);
 
   // Hit-stop: keep rendering, suspend simulation. Reads as impact weight.
