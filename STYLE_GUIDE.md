@@ -53,9 +53,12 @@
 - Ramming an asteroid with the shield up destroys it (full split, normal score)
   at a flat cost of 8 + 5×size shield
 
-## Rift Stalkers
-- More aggressive, slightly bulkier silhouette with magenta energy core
-- Seek + fire behaviour (different patterns can be layered later: strafe, charge, shotgun)
+## Rift Stalkers (revised 2026-08-06)
+- Curved manta silhouette with swept wings, wingtip barbs and a pulsing magenta
+  rift core — deliberately a different species from the player's hard-angled
+  cyan interceptor
+- Tuned as pressure, not a swarm: slow turn/acceleration, long refire, short
+  attack range; first appears wave 3, one at a time, capped at 3 per wave
 - Magenta trails and bullets (enemy energy stays magenta — only the player's
   exhaust and rock explosions moved to the fire palette)
 
@@ -110,13 +113,18 @@ real; drawing it again is both slower and worse looking.
 - High-score table clean and ranked
 - Kid Mode toggle clearly visible
 
-## Sound Direction (for future packs)
-- Thruster: low resonant drone that rises with velocity
-- Laser: short crystalline zap with slight pitch variation
-- Asteroid crack: layered rock crunch + sub-bass hit
-- Enemy engine: distorted aggressive hum
-- Pickup: bright rising arpeggio
-- Music: optional dark synthwave / ambient pulse that intensifies with wave number
+## Sound (implemented 2026-08-06 — fully procedural WebAudio, zero asset files)
+- Thruster: looped low-passed noise, gain rides the thrust key (no clicks)
+- Laser: short square-wave zap, 920→190Hz
+- Asteroid crack: noise burst + sub-sine drop, scaled by rock size
+- Enemy death: bandpass noise + falling sawtooth (metallic vs rock booms)
+- Shield impact: bandpass blip; Pickup: two-note rising sine
+- Player death: big low boom — but the FINAL death plays the game-over sting
+  instead (falling minor motif G4–Eb4–C4–G3), never both
+- Music: dark 4-bar synth loop (Am–F–C–G), bass pulse + sine arpeggio + soft
+  tick, lookahead-scheduled; plays only during gameplay, fades on menu/pause
+- M toggles all sound, persisted; audio starts on first click/keypress
+  (browser gesture requirement) and every sound call is a safe no-op before that
 
 ## Modding
 Keep the original Maelstrom-style folder structure for art/sound packs so future native ports remain drop-in compatible. The browser prototype is currently fully procedural (zero external assets) so it runs instantly.

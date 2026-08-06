@@ -213,6 +213,31 @@
     50% { background: rgba(255,0,170,0.18); }
   }
   .bindhint { font-size: 0.65rem; letter-spacing: 0.15em; opacity: 0.45; margin-bottom: 0.8rem; }
+  .go-hint {
+    font-size: 0.75rem;
+    letter-spacing: 0.25em;
+    color: #FFD23F;
+    min-height: 1.2em;
+    margin-bottom: 1rem;
+  }
+  .name-entry { display: flex; align-items: center; margin-bottom: 1.2rem; }
+  .name-entry.hidden { display: none; }
+  .name-entry input {
+    pointer-events: auto;
+    background: rgba(0,245,255,0.06);
+    border: 1px solid rgba(0,245,255,0.45);
+    color: #00F5FF;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding: 0.7rem 1rem;
+    width: 12.5rem;
+    outline: none;
+  }
+  .name-entry input:focus { box-shadow: 0 0 18px rgba(0,245,255,0.35); }
+  .name-entry input::placeholder { color: rgba(0,245,255,0.35); letter-spacing: 0.2em; }
   #fxLabel {
     position: absolute;
     bottom: 1.5rem;
@@ -258,7 +283,7 @@
     <div id="controls" class="screen hidden">
       <div class="logo" style="font-size:2.2rem">CONTROLS</div>
       <div id="bindList" class="bindlist"></div>
-      <div class="bindhint">Click a key to rebind it • B toggles bloom • Gamepad supported</div>
+      <div class="bindhint">Click a key to rebind it • B toggles bloom • M toggles sound • Gamepad supported</div>
       <button class="btn secondary" id="btnResetBinds">RESET TO DEFAULTS</button>
       <button class="btn secondary" id="btnBackControls">BACK</button>
     </div>
@@ -269,7 +294,12 @@
     </div>
     <div id="gameover" class="screen hidden">
       <div class="logo" style="font-size:2.8rem">CASCADE COMPLETE</div>
-      <div class="score" id="finalScore" style="margin:1rem 0 2rem">0</div>
+      <div class="score" id="finalScore" style="margin:1rem 0 0.4rem">0</div>
+      <div id="goHint" class="go-hint"></div>
+      <div id="nameEntry" class="name-entry hidden">
+        <input type="text" id="nameInput" maxlength="12" placeholder="PILOT NAME" autocomplete="off" spellcheck="false">
+        <button class="btn secondary" id="btnSaveScore">SAVE</button>
+      </div>
       <button class="btn" id="btnRetry">TRY AGAIN</button>
       <button class="btn secondary" id="btnMenu">MAIN MENU</button>
     </div>
@@ -352,7 +382,15 @@ const particleBuckets = new Map();
 const State = { MENU:0, PLAY:1, PAUSE:2, GAMEOVER:3, SCORES:4, CONTROLS:5 };
 let state = State.MENU;
 let kidMode = false;
-let score = 0, lives = 3, wave = 1, highScores = JSON.parse(localStorage.getItem('vc_scores') || '[]');
+let score = 0, lives = 3, wave = 1;
+// Leaderboard entries are {name, score}. Older saves stored bare numbers, so
+// migrate those on load rather than losing them.
+let highScores = [];
+try {
+  highScores = (JSON.parse(localStorage.getItem('vc_scores') || '[]') || [])
+    .map(e => typeof e === 'number' ? { name: 'PILOT', score: e } : e)
+    .filter(e => e && typeof e.score === 'number' && typeof e.name === 'string');
+} catch (e) { highScores = []; }
 let shake = 0, flash = 0;
 let frame = 0;
 
@@ -415,12 +453,174 @@ window.addEventListener('keydown', e => {
 }, true);
 
 window.addEventListener('keydown', e => {
+  // Never intercept typing in a text field (leaderboard name entry) — the
+  // Backspace/Space suppression below would make the input uneditable.
+  if (e.target && e.target.tagName === 'INPUT' && e.target.type === 'text') return;
   keys[e.code] = true;
   // Backspace must be suppressed or some browsers treat it as history-back
   // mid-game, which would be a disastrous default for a shield key.
   if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Backspace'].includes(e.code)) e.preventDefault();
 });
 window.addEventListener('keyup', e => keys[e.code] = false);
+
+// ---- Audio: fully procedural WebAudio, zero asset files ----
+// Everything is synthesised so the game keeps working straight off the
+// filesystem. The context can only start after a user gesture, so init() is
+// called from the first click/keypress and every play() call is a no-op until
+// then. M mutes, persisted in localStorage.
+const AudioFX = (() => {
+  let ac = null, master, sfx, musGain;
+  let noiseBuf, thrustGain, thrustFilter;
+  let muted = localStorage.getItem('vc_muted') === '1';
+  let musicOn = false, schedTimer = null, nextNoteTime = 0, step = 0;
+
+  function init() {
+    if (ac) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    ac = new AC();
+    master = ac.createGain();
+    master.gain.value = muted ? 0 : 1;
+    master.connect(ac.destination);
+    sfx = ac.createGain(); sfx.gain.value = 0.55; sfx.connect(master);
+    musGain = ac.createGain(); musGain.gain.value = 0; musGain.connect(master);
+
+    // one second of white noise, reused by every noise-based sound
+    noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+
+    // Thruster: looped noise through a low-pass, gain ridden by setThrust().
+    // A continuous node with a smoothed gain avoids clicks from restarting.
+    const src = ac.createBufferSource();
+    src.buffer = noiseBuf; src.loop = true;
+    thrustFilter = ac.createBiquadFilter();
+    thrustFilter.type = 'lowpass'; thrustFilter.frequency.value = 240; thrustFilter.Q.value = 0.7;
+    thrustGain = ac.createGain(); thrustGain.gain.value = 0;
+    src.connect(thrustFilter); thrustFilter.connect(thrustGain); thrustGain.connect(sfx);
+    src.start();
+
+    startScheduler();
+  }
+  function resume() { if (ac && ac.state === 'suspended') ac.resume(); }
+
+  function env(g, t, attack, peak, decay) {
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(peak, 0.0011), t + attack);
+    g.gain.exponentialRampToValueAtTime(0.001, t + attack + decay);
+  }
+  function osc(type, f0, f1, t, dur, peak, dest) {
+    const o = ac.createOscillator(); o.type = type;
+    o.frequency.setValueAtTime(f0, t);
+    if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), t + dur);
+    const g = ac.createGain(); env(g, t, 0.006, peak, dur);
+    o.connect(g); g.connect(dest || sfx);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  function noise(t, dur, peak, fType, f0, f1) {
+    const s = ac.createBufferSource(); s.buffer = noiseBuf;
+    const f = ac.createBiquadFilter(); f.type = fType;
+    f.frequency.setValueAtTime(f0, t);
+    if (f1) f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    const g = ac.createGain(); env(g, t, 0.008, peak, dur);
+    s.connect(f); f.connect(g); g.connect(sfx);
+    s.start(t); s.stop(t + dur + 0.05);
+  }
+
+  // ---- music: dark 4-bar synth loop (Am F C G), 8th-note lookahead scheduler
+  const ROOTS = [55, 43.65, 65.41, 49];
+  const EIGHTH = 0.29;
+  function scheduleStep(s, t) {
+    const root = ROOTS[Math.floor(s / 8) % 4];
+    if (s % 2 === 0) osc('triangle', root, root, t, 0.26, 0.5, musGain);       // bass pulse
+    const arp = [2, 3, 4, 6, 4, 3][s % 6];
+    osc('sine', root * arp * 2, root * arp * 2, t, 0.14, 0.10, musGain);       // arpeggio
+    if (s % 4 === 2) {                                                          // soft tick
+      const src = ac.createBufferSource(); src.buffer = noiseBuf;
+      const f = ac.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 5000;
+      const g = ac.createGain(); env(g, t, 0.002, 0.05, 0.03);
+      src.connect(f); f.connect(g); g.connect(musGain);
+      src.start(t); src.stop(t + 0.06);
+    }
+  }
+  function startScheduler() {
+    nextNoteTime = ac.currentTime + 0.1;
+    schedTimer = setInterval(() => {
+      if (!musicOn) { nextNoteTime = ac.currentTime + 0.1; return; }
+      while (nextNoteTime < ac.currentTime + 0.2) {
+        scheduleStep(step, nextNoteTime);
+        step = (step + 1) % 32;
+        nextNoteTime += EIGHTH;
+      }
+    }, 60);
+  }
+
+  let lastMusic = null;
+  return {
+    init, resume,
+    get muted() { return muted; },
+    toggleMute() {
+      muted = !muted;
+      localStorage.setItem('vc_muted', muted ? '1' : '0');
+      if (ac) master.gain.setTargetAtTime(muted ? 0 : 1, ac.currentTime, 0.05);
+      return muted;
+    },
+    setMusic(on) {
+      if (!ac || on === lastMusic) return;
+      lastMusic = on; musicOn = on;
+      musGain.gain.setTargetAtTime(on ? 0.42 : 0, ac.currentTime, on ? 0.6 : 0.25);
+    },
+    setThrust(on) {
+      if (!ac) return;
+      thrustGain.gain.setTargetAtTime(on ? 0.16 : 0, ac.currentTime, 0.07);
+    },
+    zap() {
+      if (!ac) return;
+      osc('square', 920, 190, ac.currentTime, 0.09, 0.18);
+    },
+    boom(size) {
+      if (!ac) return;
+      const t = ac.currentTime;
+      noise(t, 0.3 + size * 0.12, 0.45 + size * 0.12, 'lowpass', 950, 130);
+      osc('sine', 105 + size * 12, 34, t, 0.38, 0.55);
+    },
+    enemyBoom() {
+      if (!ac) return;
+      const t = ac.currentTime;
+      noise(t, 0.32, 0.4, 'bandpass', 1400, 220);
+      osc('sawtooth', 330, 70, t, 0.3, 0.3);
+    },
+    pickup() {
+      if (!ac) return;
+      const t = ac.currentTime;
+      osc('sine', 540, 540, t, 0.09, 0.22);
+      osc('sine', 810, 810, t + 0.09, 0.14, 0.22);
+    },
+    shieldHit() {
+      if (!ac) return;
+      const t = ac.currentTime;
+      noise(t, 0.12, 0.2, 'bandpass', 620, 380);
+      osc('sine', 300, 210, t, 0.12, 0.2);
+    },
+    playerBoom() {
+      if (!ac) return;
+      const t = ac.currentTime;
+      noise(t, 0.55, 0.7, 'lowpass', 1100, 90);
+      osc('sine', 140, 30, t, 0.55, 0.7);
+    },
+    gameOver() {
+      if (!ac) return;
+      const t = ac.currentTime;
+      // big hit, then a falling minor motif: G4 Eb4 C4 G3
+      noise(t, 0.5, 0.6, 'lowpass', 900, 80);
+      [392, 311.1, 261.6, 196].forEach((f, i) => {
+        osc('sawtooth', f, f * 0.985, t + 0.15 + i * 0.3, i === 3 ? 0.9 : 0.28, 0.22);
+      });
+    }
+  };
+})();
+window.addEventListener('pointerdown', () => { AudioFX.init(); AudioFX.resume(); });
+window.addEventListener('keydown', () => { AudioFX.init(); AudioFX.resume(); });
 
 function pollGamepad() {
   const gps = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -611,6 +811,7 @@ function updatePlayer() {
     const speed = 11;
     bullets.push({ x: player.x + Math.cos(player.angle)*18, y: player.y + Math.sin(player.angle)*18, vx: Math.cos(player.angle)*speed + player.vx*0.3, vy: Math.sin(player.angle)*speed + player.vy*0.3, life: 55, fromPlayer: true });
     spawnParticles(player.x + Math.cos(player.angle)*16, player.y + Math.sin(player.angle)*16, 4, '#00F5FF', 2, 12, 2);
+    AudioFX.zap();
   }
   // Passive drain while held (~20/sec, so a full bar is 5s of cover) plus a
   // flat cost per asteroid destroyed, paid in checkCollisions.
@@ -846,6 +1047,7 @@ function splitAsteroid(a, idx) {
   spawnParticles(a.x, a.y, 20 + a.size*10, '#FF5E00', 3.4, 40, 3.2);
   spawnParticles(a.x, a.y, 8 + a.size*5, '#C22800', 2.0, 55, 3.6);
   spawnParticles(a.x, a.y, 8 + a.size*4, '#6A6A7A', 4.2, 34, 2.4);
+  AudioFX.boom(a.size);
   shake = Math.max(shake, 8 + a.size*4);
   flash = 0.35;
   hitStop = Math.max(hitStop, 1 + a.size * 1.2);
@@ -867,7 +1069,7 @@ function spawnEnemy() {
   else if (side===1) { x=W+30; y=Math.random()*H; }
   else if (side===2) { x=Math.random()*W; y=-30; }
   else { x=Math.random()*W; y=H+30; }
-  enemies.push({ x, y, vx:0, vy:0, angle: 0, radius: 16, fireCooldown: 60 + Math.random()*40, hp: 2 });
+  enemies.push({ x, y, vx:0, vy:0, angle: 0, radius: 16, fireCooldown: 120 + Math.random()*60, hp: 2, seed: Math.random()*Math.PI*2 });
 }
 function updateEnemies() {
   for (let i=enemies.length-1; i>=0; i--) {
@@ -878,41 +1080,72 @@ function updateEnemies() {
     let da = desired - e.angle;
     while (da > Math.PI) da -= Math.PI*2;
     while (da < -Math.PI) da += Math.PI*2;
-    e.angle += da * 0.04 * dt;
-    const accel = 0.09 * (kidMode ? 0.7 : 1);
+    // Deliberately sluggish hunters: slow turn, gentle acceleration, long
+    // refire and a shorter attack range, so they pressure rather than swarm.
+    e.angle += da * 0.022 * dt;
+    const accel = 0.05 * (kidMode ? 0.7 : 1);
     e.vx += Math.cos(e.angle) * accel * dt;
     e.vy += Math.sin(e.angle) * accel * dt;
     const eDrag = Math.pow(0.97, dt);
     e.vx *= eDrag; e.vy *= eDrag;
     e.x += e.vx * dt; e.y += e.vy * dt;
     e.fireCooldown -= dt;
-    if (e.fireCooldown <= 0 && dist < 450) {
-      e.fireCooldown = kidMode ? 90 : 55;
-      bullets.push({ x: e.x + Math.cos(e.angle)*14, y: e.y + Math.sin(e.angle)*14, vx: Math.cos(e.angle)*7, vy: Math.sin(e.angle)*7, life: 70, fromPlayer: false });
+    if (e.fireCooldown <= 0 && dist < 360) {
+      e.fireCooldown = kidMode ? 170 : 110;
+      bullets.push({ x: e.x + Math.cos(e.angle)*14, y: e.y + Math.sin(e.angle)*14, vx: Math.cos(e.angle)*5.2, vy: Math.sin(e.angle)*5.2, life: 90, fromPlayer: false });
     }
-    if (Math.random() < 0.3) spawnTrail(e.x, e.y, e.angle + Math.PI, '#FF00AA');
+    // spawnTrail already offsets backwards along the given angle; the old
+    // +PI here was putting the exhaust in FRONT of the enemy.
+    if (Math.random() < 0.25) spawnTrail(e.x, e.y, e.angle, '#FF00AA');
   }
 }
+// Rift Stalkers read as a different species from the player: curved manta
+// silhouette against the player's hard angles, magenta against cyan, and a
+// pulsing energy core instead of a cockpit.
 function drawEnemies() {
   for (const e of enemies) {
     ctx.save();
     ctx.translate(e.x, e.y);
     ctx.rotate(e.angle);
+
+    const pulse = 0.65 + 0.35 * Math.sin(frame * 0.18 + e.seed);
+
+    // Manta hull: swept-back curved wings with a rear notch.
+    const hull = ctx.createLinearGradient(0, -12, 0, 12);
+    hull.addColorStop(0, '#2A1030');
+    hull.addColorStop(0.5, '#160A1C');
+    hull.addColorStop(1, '#0C0512');
     ctx.beginPath();
-    ctx.moveTo(14,0);
-    ctx.lineTo(-8,8);
-    ctx.lineTo(-4,0);
-    ctx.lineTo(-8,-8);
+    ctx.moveTo(11, 0);
+    ctx.quadraticCurveTo(2, -13, -12, -10);
+    ctx.quadraticCurveTo(-5, -4, -8, 0);
+    ctx.quadraticCurveTo(-5, 4, -12, 10);
+    ctx.quadraticCurveTo(2, 13, 11, 0);
     ctx.closePath();
-    ctx.fillStyle = '#1A0510';
+    ctx.fillStyle = hull;
     ctx.fill();
     ctx.strokeStyle = '#FF00AA';
-    ctx.lineWidth = 1.8;
+    ctx.lineWidth = 1.5;
     ctx.stroke();
+
+    // Wingtip barbs
+    for (const s of [1, -1]) {
+      ctx.beginPath();
+      ctx.arc(-11, 9.5*s, 1.3, 0, Math.PI*2);
+      ctx.fillStyle = '#FF00AA';
+      ctx.fill();
+    }
+
+    // Pulsing rift core
+    const core = ctx.createRadialGradient(0, 0, 0.5, 0, 0, 6.5*pulse);
+    core.addColorStop(0, '#FFE0F4');
+    core.addColorStop(0.35, '#FF00AA');
+    core.addColorStop(1, 'rgba(255,0,170,0)');
     ctx.beginPath();
-    ctx.arc(2,0,3,0,Math.PI*2);
-    ctx.fillStyle = '#FF00AA';
+    ctx.arc(0, 0, 6.5*pulse, 0, Math.PI*2);
+    ctx.fillStyle = core;
     ctx.fill();
+
     ctx.restore();
   }
 }
@@ -979,6 +1212,7 @@ function checkCollisions() {
           spawnParticles(e.x, e.y, 55, '#FF00AA', 6, 44, 3.2);
           spawnParticles(e.x, e.y, 24, '#FF5E00', 4, 32, 2.4);
           spawnParticles(e.x, e.y, 14, '#FFFFFF', 8, 15, 2);
+          AudioFX.enemyBoom();
           score += 250 * wave;
           shake = Math.max(shake, 14);
           flash = 0.4;
@@ -1000,6 +1234,7 @@ function checkCollisions() {
       if (shielding) {
         player.shield = Math.max(0, player.shield - (8 + a.size * 5));
         spawnParticles(player.x, player.y, 15, '#3A7BFF', 4, 25, 3);
+        AudioFX.shieldHit();
         splitAsteroid(a, ai);
         break;
       } else {
@@ -1013,6 +1248,7 @@ function checkCollisions() {
       if (shielding) {
         player.shield = Math.max(0, player.shield - 40);
         spawnParticles(player.x, player.y, 20, '#3A7BFF', 5, 30, 3);
+        AudioFX.shieldHit();
       } else {
         playerHit();
         return;
@@ -1027,6 +1263,7 @@ function checkCollisions() {
       if (shielding) {
         player.shield = Math.max(0, player.shield - 15);
         spawnParticles(player.x, player.y, 8, '#3A7BFF', 3, 20, 2);
+        AudioFX.shieldHit();
       } else {
         playerHit();
         return;
@@ -1038,6 +1275,7 @@ function checkCollisions() {
     if (Math.hypot(player.x-p.x, player.y-p.y) < player.radius + p.radius) {
       if (p.type === 'shield') player.shield = Math.min(player.maxShield, player.shield + 50);
       else player.rapid = 300;
+      AudioFX.pickup();
       spawnParticles(p.x, p.y, 12, p.type==='shield'?'#3A7BFF':'#00F5FF', 3, 25, 2);
       powerups.splice(i,1);
       score += 100;
@@ -1055,8 +1293,11 @@ function playerHit() {
   flash = 0.7;
   hitStop = 8;
   if (lives <= 0) {
+    // Final death gets the game-over sting (played in endGame), not the
+    // ordinary death boom — the two must not stack.
     endGame();
   } else {
+    AudioFX.playerBoom();
     resetPlayer();
   }
 }
@@ -1088,9 +1329,11 @@ function startWave() {
     } while (Math.hypot(x-CX, y-CY) < 180);
     spawnAsteroid(x, y, 3);
   }
-  if (wave > 1) {
-    const ec = Math.min(1 + Math.floor(wave/2), 5);
-    for (let i=0; i<ec; i++) later(spawnEnemy, 800 + i*600);
+  // Rift Stalkers arrive from wave 3, one at first, capped at 3, spaced well
+  // apart — pressure, not a swarm.
+  if (wave > 2) {
+    const ec = Math.min(1 + Math.floor((wave - 3) / 2), 3);
+    for (let i=0; i<ec; i++) later(spawnEnemy, 1200 + i*1500);
   }
 }
 function checkWaveClear() {
@@ -1125,13 +1368,33 @@ function endGame() {
   clearPendingTimers();
   waveTransition = false;
   state = State.GAMEOVER;
-  highScores.push(score);
-  highScores.sort((a,b)=>b-a);
-  highScores = highScores.slice(0,10);
-  localStorage.setItem('vc_scores', JSON.stringify(highScores));
+  AudioFX.setMusic(false);
+  AudioFX.gameOver();
   document.getElementById('finalScore').textContent = score.toLocaleString();
   document.getElementById('hud').classList.add('hidden');
   document.getElementById('gameover').classList.remove('hidden');
+  // Name entry only when the run actually places on the board.
+  const qualifies = score > 0 && (highScores.length < 10 || score > highScores[highScores.length - 1].score);
+  document.getElementById('nameEntry').classList.toggle('hidden', !qualifies);
+  document.getElementById('goHint').textContent = qualifies ? 'NEW HIGH SCORE — ENTER YOUR NAME' : '';
+  if (qualifies) {
+    const inp = document.getElementById('nameInput');
+    inp.value = localStorage.getItem('vc_name') || '';
+    setTimeout(() => inp.focus(), 60);
+  }
+}
+function saveScore() {
+  const entry = document.getElementById('nameEntry');
+  if (entry.classList.contains('hidden')) return;   // guard against double-submit
+  const name = (document.getElementById('nameInput').value.trim() || 'PILOT').toUpperCase().slice(0, 12);
+  localStorage.setItem('vc_name', name);
+  highScores.push({ name, score });
+  highScores.sort((a, b) => b.score - a.score);
+  highScores = highScores.slice(0, 10);
+  localStorage.setItem('vc_scores', JSON.stringify(highScores));
+  entry.classList.add('hidden');
+  document.getElementById('goHint').textContent = 'SCORE SAVED';
+  renderMenuScores();
 }
 function showMenu() {
   clearPendingTimers();
@@ -1153,7 +1416,7 @@ document.getElementById('btnPlay').onclick = () => {
 };
 document.getElementById('btnScores').onclick = () => {
   const list = document.getElementById('hsList');
-  list.innerHTML = highScores.length ? highScores.map((s,i)=>`<div class="hs-row"><span>#${i+1}</span><span>${s.toLocaleString()}</span></div>`).join('') : '<div class="hs-row">No scores yet</div>';
+  list.innerHTML = highScores.length ? highScores.map(hsRow).join('') : '<div class="hs-row">No scores yet</div>';
   document.getElementById('menu').classList.add('hidden');
   document.getElementById('scores').classList.remove('hidden');
   state = State.SCORES;
@@ -1172,18 +1435,30 @@ document.getElementById('btnResume').onclick = () => {
 document.getElementById('btnQuit').onclick = showMenu;
 document.getElementById('btnRetry').onclick = startGame;
 document.getElementById('btnMenu').onclick = showMenu;
+document.getElementById('btnSaveScore').onclick = saveScore;
+document.getElementById('nameInput').addEventListener('keydown', e => {
+  e.stopPropagation();
+  if (e.key === 'Enter') saveScore();
+});
 
 // B toggles the whole post chain on and off mid-frame, so the effect can be
 // judged by flipping it during play rather than by comparing screenshots.
 const fxLabel = document.getElementById('fxLabel');
 let fxLabelTimer = 0;
+function flashFxLabel(text) {
+  fxLabel.textContent = text;
+  fxLabel.style.opacity = '1';
+  clearTimeout(fxLabelTimer);
+  fxLabelTimer = setTimeout(() => { fxLabel.style.opacity = '0'; }, 1100);
+}
 window.addEventListener('keydown', e => {
+  if (e.target && e.target.tagName === 'INPUT' && e.target.type === 'text') return;
   if (e.code === 'KeyB') {
     BLOOM.enabled = !BLOOM.enabled;
-    fxLabel.textContent = 'BLOOM ' + (BLOOM.enabled ? 'ON' : 'OFF');
-    fxLabel.style.opacity = '1';
-    clearTimeout(fxLabelTimer);
-    fxLabelTimer = setTimeout(() => { fxLabel.style.opacity = '0'; }, 1100);
+    flashFxLabel('BLOOM ' + (BLOOM.enabled ? 'ON' : 'OFF'));
+  }
+  if (e.code === 'KeyM') {
+    flashFxLabel('SOUND ' + (AudioFX.toggleMute() ? 'OFF' : 'ON'));
   }
 });
 
@@ -1228,10 +1503,15 @@ document.getElementById('btnResetBinds').onclick = () => {
 };
 
 // ---- Home screen leaderboard ----
+// Names are user text going into innerHTML — escape them.
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function hsRow(e, i) {
+  return `<div class="hs-row"><span>#${i+1} ${esc(e.name)}</span><span>${e.score.toLocaleString()}</span></div>`;
+}
 function renderMenuScores() {
   const el = document.getElementById('menuScores');
   el.innerHTML = highScores.length
-    ? highScores.slice(0, 5).map((s, i) => `<div class="hs-row"><span>#${i+1}</span><span>${s.toLocaleString()}</span></div>`).join('')
+    ? highScores.slice(0, 5).map(hsRow).join('')
     : '<div class="hs-row"><span>NO SCORES YET</span><span>—</span></div>';
 }
 renderMenuScores();
@@ -1249,6 +1529,8 @@ function loop(now) {
 
   frame += dt;
   pollGamepad();
+  AudioFX.setMusic(state === State.PLAY);
+  AudioFX.setThrust(state === State.PLAY && player.thrust);
 
   // Hit-stop: keep rendering, suspend simulation. Reads as impact weight.
   const frozen = hitStop > 0;
