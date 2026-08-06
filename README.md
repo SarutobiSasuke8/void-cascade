@@ -1,5 +1,7 @@
 # VOID CASCADE
 
+![Void Cascade](assets/banner.jpg)
+
 **Shatter the void. Master the cascade.**
 
 A fully rebranded, visually spectacular modern remake of the classic Asteroids-style game *Maelstrom*.
