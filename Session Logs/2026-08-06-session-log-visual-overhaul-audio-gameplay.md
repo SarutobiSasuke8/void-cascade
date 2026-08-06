@@ -256,5 +256,88 @@ All pushed to `main` on GitHub: https://github.com/SarutobiSasuke8/void-cascade
 
 **2026-08-06**
 
-Model: Claude Fable 5 → Claude Haiku 4.5
+---
 
+## Codex Continuation: Generated Art, Torpedoes, HUD, and Sound
+
+### Session Outcome
+
+The game was made visually more coherent with generated production art, the generated player ship was correctly connected to the live Canvas renderer and enlarged for readability, and a finite-ammunition torpedo weapon was implemented. The HUD, power-ups, controls, menu presentation, and procedural audio were refined and verified in a live local browser session.
+
+### Generated and Integrated Assets
+
+The following transparent PNG assets were generated and integrated. The Canvas code keeps procedural fallbacks so direct `file://` launches do not break if a browser refuses to make a local image Canvas-safe.
+
+| Asset | Location | Use |
+|---|---|---|
+| Menu background | `assets/backgrounds/menu_home.png` | Home-screen space backdrop |
+| VOID CASCADE banner | `assets/ui/void_cascade_banner.png` | Menu title treatment |
+| Player interceptor | `assets/ships/player_default.png` | Live player ship and life icons |
+| Large asteroid | `assets/asteroids/large/asteroid_01.png` | Asteroid presentation |
+| Rift Stalker | `assets/enemies/rift_stalker_01.png` | Enemy presentation |
+| Shield charge | `assets/powerups/shield_charge.png` | Shield pickup |
+| Rapid-fire charge | `assets/powerups/rapid_fire.png` | Primary-fire upgrade pickup |
+| Torpedo | `assets/weapons/torpedo.png` | Projectile and ammunition pickup |
+
+The torpedo master was generated against a chroma background, then normalized to a transparent RGBA PNG. Validation confirmed transparent corners and a clean missile bounding box before integration.
+
+### Rendering and Presentation Decisions
+
+- The player ship was enlarged to 58px in the game renderer so its generated silhouette reads clearly during play.
+- The new menu uses the cosmic background and generated title banner.
+- Generated sprites load via the local HTTP server (`http://127.0.0.1:4173`), avoiding `file://` Canvas tainting that can interrupt WebGL post-processing.
+- Shield was rebound from Backspace to Down Arrow, with Left Shift as its second default binding.
+- The pulsing procedural aura around power-ups was removed. Pickup art now renders as the asset itself; scene-wide bloom remains a separate post-processing effect.
+
+### Weapon and Pickup Additions
+
+Rapid Fire remains the primary-weapon upgrade and reduces primary-shot cooldown while active.
+
+#### Torpedoes
+
+- New alternate-weapon control: `X` or `Left Ctrl` (gamepad face button 4).
+- A new run starts with 3 torpedoes.
+- One key press fires one torpedo; holding the control cannot consume the entire supply.
+- Torpedoes have visible orange exhaust, a generated missile sprite, direct-impact destruction, particles, screen shake, flash, and hit-stop.
+- A torpedo destroys an asteroid (then its normal child fragments) or a Rift Stalker in one hit.
+- Torpedo power-ups add 2 rounds, capped at 9.
+- HUD exposes the current torpedo count in orange.
+
+Power-up drop weights are currently 40% shield, 32% rapid fire, and 28% torpedo whenever a drop is earned.
+
+### HUD Refinement
+
+The life counter now displays up to three miniature copies of the player interceptor instead of triangle glyphs. It is accessible (`aria-label` reports remaining ships), updates only when the life count changes, and uses the same art as the playable ship.
+
+### Audio Work
+
+All effects remain generated through WebAudio; no downloaded audio files or external runtime dependencies were added.
+
+| Effect | Current design |
+|---|---|
+| Main cannon | High-frequency energy snap, falling triangle tone, sawtooth body, and a small low-frequency weight layer |
+| Torpedo launch | Band-passed launch burst plus descending saw/sine motor layers |
+| Torpedo impact | Low-passed blast, sub hit, and short metallic edge |
+| Asteroid explosion | Size-scaled pressure noise, bass thump, and bright debris crack |
+| Enemy explosion | Low explosion bed with a metallic falling component |
+| Player death | Longest and deepest pressure hit, low sine impact, and debris crack |
+
+Recommended later enhancement: source several permissively licensed real laser/explosion recordings and use them as optional layers with per-shot selection and subtle pitch randomization. The procedural layers can remain as the offline-safe base.
+
+### Verification Performed
+
+- JavaScript parsing of the inline game script: pass.
+- `git diff --check`: pass.
+- Local-server checks: menu and generated torpedo image each returned HTTP 200.
+- Headless Chrome visual checks: pass for the menu, generated player ship, torpedo flight, power-up rendering, and three-mini-ship HUD.
+- Automated live torpedo check: `3 -> 2` ammunition after one press, exactly one shot active, impact split a large asteroid into two child asteroids, and no browser runtime exceptions occurred.
+- Automated pickup check: a torpedo pickup changed ammunition from `3 -> 5` and was removed after collection.
+
+### Current Working State / Handoff
+
+- The development server was available at `http://127.0.0.1:4173/play/index.html`. Cache-busted checks used `?v=3`, `?v=4`, and `?v=5`.
+- New work in this continuation is not represented by the three earlier commits listed above; check `git status` before making a commit.
+- Existing unrelated `debug.log` was left untouched.
+- No external audio samples have been downloaded. If samples are added later, record their source and license in this log and keep them under `assets/audio/`.
+
+Model: Claude Fable 5 → Claude Haiku 4.5
