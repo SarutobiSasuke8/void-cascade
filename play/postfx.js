@@ -147,7 +147,13 @@ void main() {
 
   float vig = 1.0 - smoothstep(0.45, 1.15, dist * 1.6) * uVignette;
   col *= vig;
-  col += vec3(uFlash);
+  // Scale existing brightness rather than adding a flat offset: an additive
+  // flash lifts near-black pixels uniformly, which was enough to make the
+  // faint background grid (intentionally kept under the bloom threshold)
+  // pop into visible squares on every explosion. Multiplicative scaling
+  // still punches up bright explosion/bloom pixels while leaving near-zero
+  // background and grid pixels near zero.
+  col *= (1.0 + uFlash);
 
   // Soft shoulder that is EXACTLY identity below uKneeStart. An earlier build
   // used extended Reinhard here, which compresses the whole range and measured
