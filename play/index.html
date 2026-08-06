@@ -161,19 +161,26 @@
     color: #3A7BFF;
   }
   .kid-toggle input { accent-color: #00F5FF; width: 18px; height: 18px; }
-  #flash {
+  #fxLabel {
     position: absolute;
-    inset: 0;
-    background: white;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.75rem;
+    letter-spacing: 0.25em;
+    color: #00F5FF;
+    text-shadow: 0 0 12px #00F5FF;
     opacity: 0;
+    transition: opacity 0.25s;
     pointer-events: none;
-    transition: opacity 0.05s;
+    z-index: 5;
   }
 </style>
 </head>
 <body>
 <div id="gameContainer">
   <canvas id="c"></canvas>
+  <div id="fxLabel"></div>
   <div id="ui">
     <div id="menu" class="screen">
       <div class="logo">VOID CASCADE</div>
@@ -200,6 +207,7 @@
         <div>SPACE / Z &nbsp;&nbsp;&nbsp; Fire</div>
         <div>SHIFT &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Shield (when available)</div>
         <div>ESC / P &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Pause</div>
+        <div>B &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Toggle bloom (A/B)</div>
         <div style="margin-top:1rem; color:#00F5FF">Gamepad fully supported</div>
       </div>
       <button class="btn secondary" id="btnBackControls">BACK</button>
@@ -271,6 +279,20 @@ if (window.ResizeObserver) {
   new ResizeObserver(resize).observe(document.getElementById('gameContainer'));
 }
 resize();
+
+// Look tuning, all in one place. Exposed on window so it can be adjusted live
+// from the console without a reload: BLOOM.intensity = 2 and so on.
+const BLOOM = window.BLOOM = {
+  intensity: 1.6,   // how much of the bloom buffer is added back
+  threshold: 0.40,  // brightness above which a pixel contributes glow
+  knee: 0.15,       // softness of that cutoff; MUST stay below threshold, or
+                    // the background itself leaks into the bloom and washes out
+  radius: 1.0,      // tent filter spread during upsample; widens the halo
+  aberration: 0.005,
+  vignette: 0.5,
+  kneeStart: 0.9,   // highlights below this are passed through untouched
+  enabled: true     // toggled live with B, for A/B comparison
+};
 
 // Reused per-colour buckets for particle drawing. Allocated once so the render
 // path does not create garbage every frame.
@@ -832,7 +854,25 @@ function playerHit() {
   }
 }
 
+// Every pending spawn timer, so a restart or a quit to menu can cancel them.
+// Without this, enemies queued by the previous run keep arriving after you die,
+// on the menu, and into the next game.
+const pendingTimers = new Set();
+function later(fn, ms) {
+  const id = setTimeout(() => { pendingTimers.delete(id); fn(); }, ms);
+  pendingTimers.add(id);
+  return id;
+}
+function clearPendingTimers() {
+  for (const id of pendingTimers) clearTimeout(id);
+  pendingTimers.clear();
+}
+
+// True while the next wave is queued but has not spawned yet.
+let waveTransition = false;
+
 function startWave() {
+  waveTransition = false;
   const count = 3 + wave * 2;
   for (let i=0; i<count; i++) {
     let x,y;
@@ -843,17 +883,26 @@ function startWave() {
   }
   if (wave > 1) {
     const ec = Math.min(1 + Math.floor(wave/2), 5);
-    for (let i=0; i<ec; i++) setTimeout(() => spawnEnemy(), 800 + i*600);
+    for (let i=0; i<ec; i++) later(spawnEnemy, 800 + i*600);
   }
 }
 function checkWaveClear() {
+  // The guard is essential. This runs every frame, but the next wave is on a
+  // 1500ms timer, so without it the field-is-empty condition stays true for
+  // ~90 frames at 60Hz: wave incremented 90 times and 90 spawns were queued,
+  // turning a cleared wave 1 into wave 91 and 450 enemies arriving at once.
+  if (waveTransition) return;
   if (asteroids.length === 0 && enemies.length === 0 && state === State.PLAY) {
+    waveTransition = true;
     wave++;
-    setTimeout(startWave, 1500);
+    later(startWave, 1500);
   }
 }
 
 function startGame() {
+  clearPendingTimers();
+  waveTransition = false;
+  hitStop = 0; shake = 0; flash = 0;
   score = 0; lives = 3; wave = 1;
   asteroids.length = 0; enemies.length = 0; bullets.length = 0;
   powerups.length = 0; particles.length = 0;
@@ -866,6 +915,8 @@ function startGame() {
   document.getElementById('hud').classList.remove('hidden');
 }
 function endGame() {
+  clearPendingTimers();
+  waveTransition = false;
   state = State.GAMEOVER;
   highScores.push(score);
   highScores.sort((a,b)=>b-a);
@@ -876,6 +927,8 @@ function endGame() {
   document.getElementById('gameover').classList.remove('hidden');
 }
 function showMenu() {
+  clearPendingTimers();
+  waveTransition = false;
   state = State.MENU;
   document.getElementById('menu').classList.remove('hidden');
   document.getElementById('gameover').classList.add('hidden');
@@ -910,6 +963,20 @@ document.getElementById('btnResume').onclick = () => {
 document.getElementById('btnQuit').onclick = showMenu;
 document.getElementById('btnRetry').onclick = startGame;
 document.getElementById('btnMenu').onclick = showMenu;
+
+// B toggles the whole post chain on and off mid-frame, so the effect can be
+// judged by flipping it during play rather than by comparing screenshots.
+const fxLabel = document.getElementById('fxLabel');
+let fxLabelTimer = 0;
+window.addEventListener('keydown', e => {
+  if (e.code === 'KeyB') {
+    BLOOM.enabled = !BLOOM.enabled;
+    fxLabel.textContent = 'BLOOM ' + (BLOOM.enabled ? 'ON' : 'OFF');
+    fxLabel.style.opacity = '1';
+    clearTimeout(fxLabelTimer);
+    fxLabelTimer = setTimeout(() => { fxLabel.style.opacity = '0'; }, 1100);
+  }
+});
 
 window.addEventListener('keydown', e => {
   if (e.code === 'Escape' || e.code === 'KeyP') {
@@ -983,10 +1050,13 @@ function loop(now) {
   // that actually turns it into the look: bright pass, two blur octaves,
   // additive composite, chromatic aberration, vignette.
   postfx.render({
-    bloomIntensity: 1.35,
-    threshold: 0.32,
-    aberration: 0.005 + shake * 0.0012,
-    vignette: 0.55,
+    bloomIntensity: BLOOM.enabled ? BLOOM.intensity : 0,
+    threshold: BLOOM.threshold,
+    knee: BLOOM.knee,
+    radius: BLOOM.radius,
+    aberration: BLOOM.aberration + shake * 0.0012,
+    vignette: BLOOM.vignette,
+    kneeStart: BLOOM.kneeStart,
     flash: flash * 0.85
   });
 }

@@ -63,16 +63,24 @@ external dependencies; falls back to an unprocessed blit if WebGL is missing.
 - Screen shake on every significant hit/destruction
 - Hit-stop (brief simulation freeze) scaled to impact size
 - Full-screen white flash (short, decaying) on big events, applied in-shader
-- **Bloom** — soft-knee bright pass at `0.32`, two blurred octaves (half and
-  quarter res) composited additively
+- **Bloom** — soft-knee bright pass feeding a 6-level downsample/upsample mip
+  pyramid. Two fixed-size gaussian octaves were tried first and reached only
+  ~16px, which is invisible; each mip level doubles the reach, so the pyramid is
+  what makes the glow read as light. `knee` must stay below `threshold`, or the
+  bright pass never fully excludes anything and the near-black background leaks
+  into the bloom and washes the whole image out.
 - **Chromatic aberration** — radial, scales with distance from centre and with
   current screen shake
 - **Vignette**
-- **Tone mapping** — extended Reinhard with a white point. Deliberately *not* a
-  plain `x/(x+k)` curve: that has a slope above 1.0 at black and lifts the
-  background out of near-black, destroying the contrast the neon depends on.
-  This curve has slope exactly 1.0 at zero, so the void stays the void.
+- **Tone mapping** — identity below `kneeStart` (0.9), soft exponential shoulder
+  above it. Whole-range curves were tried and rejected: extended Reinhard
+  measured 255 -> 172, dimming every pixel in the game by a third. Only bloom
+  overshoot should ever be compressed.
 - Still optional/future: subtle CRT scanlines toggle
+
+Press **B** in game to toggle the whole chain for an A/B. All knobs live in the
+`BLOOM` object in `index.html` and are exposed on `window`, so they can be tuned
+live from the console (`BLOOM.intensity = 2.5`) without a reload.
 
 **Particles:** one filled arc each, batched by colour. Do not re-add the old
 core-plus-halo pair. The halo was faking a glow the bloom pass now produces for
