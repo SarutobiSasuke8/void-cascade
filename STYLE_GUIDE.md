@@ -127,7 +127,7 @@ real; drawing it again is both slower and worse looking.
   (browser gesture requirement) and every sound call is a safe no-op before that
 
 ## Modding
-Keep the original Maelstrom-style folder structure for art/sound packs so future native ports remain drop-in compatible. The browser prototype is currently fully procedural (zero external assets) so it runs instantly.
+Keep a consistent folder structure for art/sound packs so future native ports stay drop-in compatible. The browser prototype is currently fully procedural (zero external assets) so it runs instantly.
 
 ---
 

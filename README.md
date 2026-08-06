@@ -4,7 +4,7 @@
 
 **Shatter the void. Master the cascade.**
 
-A fully rebranded, visually spectacular modern remake of the classic Asteroids-style game *Maelstrom*.
+A visually spectacular, skill-based arcade score chase in the Asteroids lineage.
 
 Cinematic deep-space intensity mixed with pure arcade fun. Dark cosmic voids lit by neon energy, glowing asteroids, and explosive particle fireworks. Geometry Wars meets Asteroids meets high-end indie (Hyper Light Drifter / Downwell energy).
 
@@ -34,7 +34,7 @@ The simulation is frame-rate independent, so it plays identically at 60, 120 and
 - Ship rotation + thrust with authentic inertia
 - High-velocity shooting
 - Breakable asteroids that split into smaller, faster fragments
-- Enemy fighters (**Rift Stalkers** — rebrand of Shenobi)
+- Enemy fighters (**Rift Stalkers**)
 - Power-ups, shields, and escalating difficulty
 - Pure skill-based high-score chase
 - Optional **Kid Mode** (easier difficulty, auto-shield assist, more frequent power-ups)
@@ -84,7 +84,7 @@ Minimal, high-contrast neon. Clean geometric buttons. High-score table with the 
 
 ## Asset List (Mod-Friendly)
 
-Designed so art/sound packs can be swapped exactly like original Maelstrom.
+Designed so art/sound packs can be swapped in without touching game code.
 
 ### Required Art Pack Structure
 ```
@@ -147,11 +147,11 @@ Future: WebGL particle systems, full audio engine, mobile touch, multiplayer via
 
 ## Credits & License
 
-Gameplay systems inspired by the classic *Maelstrom* (Ambrosia Software / Sam Lantinga / libsdl-org).
-
+Loosely inspired by the classic Asteroids-style game *Maelstrom* (Ambrosia Software / Sam
+Lantinga / libsdl-org) — no code, assets, or data from that project are used here.
 Original Maelstrom 4.x is available under the Zlib license: https://github.com/libsdl-org/Maelstrom
 
-This project is a complete visual and branding remake. All new art direction, code, and assets created for Void Cascade.
+All art direction, code, and assets are original work created for Void Cascade.
 
 ---
 
