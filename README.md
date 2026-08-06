@@ -130,6 +130,21 @@ Future: WebGL particle systems, full audio engine, mobile touch, multiplayer via
 
 ---
 
+## Project Docs
+
+| Doc | Purpose |
+|---|---|
+| [CLAUDE.md](CLAUDE.md) | Agent contract — operating loop, quality bar, verification policy |
+| [STYLE_GUIDE.md](STYLE_GUIDE.md) | Visual and audio bible; source of truth for art decisions |
+| [docs/PLAYTEST_CHECKLIST.md](docs/PLAYTEST_CHECKLIST.md) | The gate every gameplay change passes |
+| [docs/INPUT_CONTROL_MAP.md](docs/INPUT_CONTROL_MAP.md) | Canonical control mapping |
+| [docs/ASSET_PIPELINE.md](docs/ASSET_PIPELINE.md) | Asset layout, naming and loading rules |
+| [assets/CREDITS.md](assets/CREDITS.md) | Source and licence for every asset |
+| [TODO.md](TODO.md) | Working queue |
+| [Session Logs/](Session%20Logs/_Session%20Logs%20Index.md) | Append-only session history |
+
+---
+
 ## Credits & License
 
 Gameplay systems inspired by the classic *Maelstrom* (Ambrosia Software / Sam Lantinga / libsdl-org).
