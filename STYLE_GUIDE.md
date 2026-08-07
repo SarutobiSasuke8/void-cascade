@@ -59,7 +59,8 @@ large 1→4 hits, medium 1→2 hits, small always one-shot. Kid Mode never gets 
   unlike the rock-shatter boom) so you can hear the rock survived
 - Chip damage still scores (15×wave) so shooting armour never feels inert
 - Shield-ramming and torpedo direct hits ignore armour entirely; the torpedo blast wave
-  deals 2 damage
+  deals 2 damage. **Void Iron is the exception to the shield rule** — see its section
+  below; a shield ram chips it and bounces off rather than deleting it
 
 ## Shield (added 2026-08-06)
 - Default key: Backspace (rebindable). Everyone starts each life with 60 shield
@@ -262,14 +263,43 @@ Hazards are **terrain, not enemies**: they never block wave clear.
   (zero at rim, strongest at core) on ship, bullets (hardest — curving shots are the
   point), torpedoes, rocks and pickups. Skipped on boss waves.
 
-## Crystal Asteroids (added 2026-08-07)
+## Void Iron (added 2026-08-07, replaced Crystal Asteroids)
 
-The deliberate exception to "asteroids never glow": energy in mineral form. From wave 11
-~22% of large rocks spawn crystal — translucent faceted shards, plasma-blue fill,
-neon-cyan edge glow, inner facet lines. Always 1 hp (never armoured). A large crystal
-skips the medium tier and **shatters into six fast small slivers** (mediums into three);
-slivers die clean. Cold white/cyan/blue shatter burst — no embers — with a glassy
-shatter cue instead of the rock boom. Scores 75×size×wave (riskier pays better).
+**The heavy plated rock — the field's one genuine obstacle.** From wave 11 an 18% share
+of large rocks spawn as Void Iron, rising 1 point per wave to a 30% cap, so late waves
+escalate in *texture* rather than in rock count.
+
+- **Large tier only.** Heavy children would turn one rock into a six-stage slog, which
+  is the exact "spongy" failure the armour system exists to avoid. The shell is the
+  event; what spills out is ordinary rock (2 normal mediums, so the entity budget
+  matches any other large).
+- 5–8 hits (`heavyArmorFor()`, stepping every 4 waves from 11). Kid Mode gets a token
+  2-hit shell. Radius 48 (vs 42), drifts at 0.62× speed and tumbles slowly — the
+  silhouette must have time to register as different before it reaches you.
+- **Machined, not weathered:** 8 vertices with a tight radius spread (0.92–1.02) give
+  long flat faces, so it reads as a blocky hulk even before the plating draws.
+- **Still matte.** Gunmetal plates (brightest stop max-channel 0.39, just under the
+  0.40 bloom threshold) over the rock body; *only* the seams glow. All of its light is
+  crack-energy `#00FFCC` burning in the gaps between plates — faint (0.14) while intact
+  so the armour is telegraphed before you shoot, blazing (0.86) as the shell fails.
+  Measured: an intact hulk has **4.6%** of its body over the bloom threshold vs a normal
+  rock's 21.3%; nearly-broken it reaches 22.9%. It is the darkest object in the field
+  and it lights up as you break it.
+- Death is metal giving way, not stone breaking: vented teal seam energy + gunmetal
+  plate shrapnel over a normal fireball, with the bright glassy crack (`AudioFX.shatter`)
+  layered on top of the rock boom.
+- Scores 130×size×wave — the best in the field, because it costs the most time and the
+  most exposure. Drops a powerup at **65%** (vs a normal rock's 12%): cracking the hulk
+  is the field's resupply, which is what makes it a choice rather than a chore.
+- **Shield-ramming does not delete it** (the one asteroid exception): a ram staves in
+  2 plates for 30 shield and bounces you clear. A full 100 bar is 4 rams — just barely
+  lethal, and it leaves you with no shield in a wave-20 field, so guns stay the sane
+  answer. A torpedo still vaporises it outright: that is a scarce resource spent well.
+
+**Why the crystals went.** They were the loudest thing on screen — the deliberate
+exception to "asteroids never glow" — but they had 1 hp. The look promised a threat the
+mechanic never delivered, so they read as decoration rather than danger. If a glowing
+mineral species ever returns it must be *harder* than a rock, not softer.
 
 ## Boss: The Cascade Core (added 2026-08-07)
 
@@ -287,7 +317,8 @@ Every 10th wave, replacing the normal spawn table (4 rocks, no stalkers/tendril/
   gunmetal roots tapering to glowing magenta tips; no gameplay hitbox or behaviour of
   their own unless/until sprite work lands and play-feel says otherwise — do not wire
   them into collision or damage without a separate decision.
-- Phases by surviving nodes: 4–3 spits medium rocks (crystal-capable from wave 20);
+- Phases by surviving nodes: 4–3 spits plain medium rocks (never Void Iron — that is a
+  large-tier species, and the fight is already the heaviest scene in the game);
   at 2 it adds a 10-bullet radial ring with real gaps; at 1 it **charges across the
   field and re-enters through the screen wrap** — locked magenta bearing-line
   telegraph + klaxon first. Each node kill speeds the rotation.

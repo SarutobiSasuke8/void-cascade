@@ -56,6 +56,11 @@ One-line fixes do not need a log.
   *(Codex)* — boss tendril rendering, Rift Stalker/Tendril tier tables gated at waves
   11 and 21, asteroid variants, drift mine, torpedo/multiplier pickup and boss-void
   background art.
+- [2026-08-07 — Wave-26 feedback difficulty tuning](2026-08-07-session-log-wave26-difficulty-tuning.md)
+  — first long-run playtest feedback (wave 26, 3M pts) into balance: ×2 weapon tier
+  now decays (30s, cyan HUD underline), lives cap 9→5, mines 27% larger with magenta
+  halo, enemy-tier aura + rank chevrons. Wave-20 dedicated boss and escalation levers
+  queued as design directions in TODO.
 
 ## Current Themes
 
