@@ -32,7 +32,34 @@ game is always playable — a missing sprite is a downgrade, never a crash.
 | Large asteroid 01 | `asteroids/large/asteroid_01.png` | ✅ | One master serves all three sizes |
 | Asteroid variants 02–04 | `asteroids/large/asteroid_02..04.png` | ✅ | Three distinct matte-rock silhouettes; picked randomly per non-crystal rock |
 | Medium / small tiers | `asteroids/medium/asteroid_01.png`, `asteroids/small/asteroid_01.png` | ✅ | Dedicated compact and jagged masters now render at their respective tiers |
-| Crystal asteroid | — | ➖ | **Deliberately procedural.** Translucent faceted shard with a plasma-blue glow; a PNG cannot carry the additive edge glow the bloom pass needs |
+| **Void Iron (heavy)** | `asteroids/large/void_iron_01.png` | 🔲 **wanted** | **Top art priority.** Large tier only, drawn at radius 48 (~235px). See the brief below — the code already looks for this path and swaps to it automatically |
+| Crystal asteroid | — | ❌ dropped | Species removed 2026-08-07 (1 hp made the glow a lie). Do **not** generate crystal art; Void Iron replaced it |
+
+### Art brief — Void Iron (`asteroids/large/void_iron_01.png`)
+
+The one outstanding gameplay sprite. It renders today from a procedural fallback (a
+standard rock master with plating drawn over it), so this is an upgrade, not a blocker —
+but a dedicated master is what the species deserves. Drop the file at that exact path
+and the renderer picks it up and stops drawing its own plating.
+
+- **Read in one glance: this rock is armoured and it will take work.** It sits in the
+  same field as four weathered grey rocks and must never be mistaken for one.
+- Square RGBA PNG, 1254×1254 master, transparent background, per `ASSET_PIPELINE.md`.
+  No facing requirement — it tumbles.
+- **Blocky and machined, not weathered.** Long flat faces, hard angular silhouette.
+  The other rocks are potatoes; this is a slab.
+- **Gunmetal armour plates bolted over a dark rock core.** Visible plate edges, seams
+  and bolt heads. Think salvaged hull plating welded onto an asteroid.
+- **Stay matte — this is critical.** Keep the brightest pixel's max channel at or below
+  **0.40** (102/255), same as the shipped rocks. The body must sit under the bloom
+  threshold or it stops reading as solid. Measured target: no more than ~5% of body
+  pixels over that line.
+- **Leave the glow to the code.** Do *not* bake in glowing seams. The engine draws
+  crack-energy `#00FFCC` in the plate gaps and brightens it as the shell breaks — baked
+  glow would double it and blow out the damage tell. Dark seams in the art are ideal:
+  they give the engine's energy somewhere to live.
+- Palette: rock-grey `#2A2A3A`/`#4A4A5A` with a cooler steel cast; no magenta (enemy
+  colour) and no cyan (player/energy colour).
 
 ## Hazards (new 2026-08-07)
 
@@ -115,12 +142,14 @@ the CSS, it does not sit on top of it.
 ## Priority order for the next art pass
 
 The 2026-08-07 pass cleared the whole previous list — boss, drift mine, asteroid
-variants, torpedo and multiplier pickups, and the boss-wave background are all done
-and wired. What is left is genuinely optional:
+variants (including the medium and small tiers), torpedo and multiplier pickups, and
+the boss-wave background are all done and wired.
 
-1. **Medium / small asteroid tiers** — the large masters scale down acceptably, so
-   this is polish, not a gap
-2. Optional UI art (boss-bar frame, wave banner, button plate) — each would *replace*
+1. **Void Iron heavy asteroid** — the only outstanding *gameplay* sprite, and the one
+   asset a player will actually notice missing. Brief above.
+2. **Wave-20 boss set** — blocked on the design decision, not on art. Do not start
+   until the second boss is specified (see `TODO.md`); a boss sprite drawn against no
+   mechanic is wasted work.
+3. Optional UI art (boss-bar frame, wave banner, button plate) — each would *replace*
    working CSS rather than fill a hole; only worth doing if the CSS starts to look
-   cheap next to the sprite work
-3. Nothing else is outstanding. Prefer playtest-driven fixes over new art from here.
+   cheap next to the sprite work.

@@ -325,13 +325,15 @@
   .wpn { display: inline-block; position: relative; padding-bottom: 3px; opacity: 0.85; }
   .wpn + .wpn { margin-left: 0.9em; }
   .wpn.oc { color: #FFD23F; opacity: 1; text-shadow: 0 0 8px #FFD23F, 0 0 18px rgba(255,210,63,0.5); }
-  .wpn.oc > i {
+  .wpn.oc > i, .wpn.t2 > i {
     position: absolute; left: 0; bottom: 0; height: 2px; width: 100%;
     background: #FFD23F; box-shadow: 0 0 6px #FFD23F;
     transform-origin: left center;
   }
+  /* The ×2 tier's slower decay reuses the underline in cyan — gold is OVERCHARGE only. */
+  .wpn.t2 > i { background: #00F5FF; box-shadow: 0 0 6px #00F5FF; }
   /* Last ~3s: the whole entry blinks, matching the multiplier's expiry language. */
-  .wpn.oc.low { animation: ocPulse 0.5s steps(2) infinite; }
+  .wpn.oc.low, .wpn.t2.low { animation: ocPulse 0.5s steps(2) infinite; }
   @keyframes ocPulse { 50% { opacity: 0.4; } }
   /* Wave tally and reward toasts live in the DOM, not on the game canvas.
      Drawn to the canvas they went through the bloom pass, which blew the
@@ -454,6 +456,25 @@
     opacity: 0.92;
     filter: drop-shadow(0 0 7px rgba(0,245,255,0.22));
   }
+  /* Weapon-stack glow tiers (2026-08-07). A second copy of the frame carries a
+     stronger pre-baked drop-shadow and fades in over the base, so the animated
+     property is compositor-only opacity — never a live filter animation on a
+     full-screen image. ×2 lifts the cyan edge-light; ×3 floods it gold (the
+     OVERCHARGE token, gold is reserved for it) with a slow breathing pulse. */
+  #hudFrame #hudFrameGlow {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    filter: drop-shadow(0 0 9px rgba(0,245,255,0.65)) drop-shadow(0 0 20px rgba(0,245,255,0.3));
+  }
+  #hudFrame.stack2 #hudFrameGlow { opacity: 0.45; }
+  #hudFrame.stack3 #hudFrameGlow {
+    filter: drop-shadow(0 0 12px rgba(255,210,63,0.85)) drop-shadow(0 0 28px rgba(255,210,63,0.45));
+    opacity: 1;
+    animation: frameGlowPulse 1.8s ease-in-out infinite;
+  }
+  @keyframes frameGlowPulse { 50% { opacity: 0.55; } }
   @media (max-width: 620px), (max-height: 520px) {
     :root {
       --hud-safe-x: clamp(0.85rem, 4vw, 1.4rem);
@@ -687,6 +708,7 @@
   </div>
   <div id="hudFrame" aria-hidden="true">
     <img src="../assets/ui/cockpit_overlay_hud.png" alt="">
+    <img id="hudFrameGlow" src="../assets/ui/cockpit_overlay_hud.png" alt="">
   </div>
   <div id="localFileNotice" hidden>
     LOCAL FILE MODE: Chrome blocks generated sprites from the WebGL canvas here.
@@ -718,6 +740,10 @@ const SPRITES = {
   asteroids: [new Image(), new Image(), new Image(), new Image()],
   mediumAsteroids: [new Image()],
   smallAsteroids: [new Image()],
+  // Void Iron: the heavy plated rock. Until this master exists the renderer
+  // falls back to a standard rock master with procedural plating drawn over
+  // it, so the species is legible today and swaps to baked art for free.
+  voidIron: new Image(),
   riftStalker: new Image(),
   riftTendril: new Image(),
   driftMine: new Image(),
@@ -740,6 +766,7 @@ SPRITES.asteroids.forEach((sprite, i) => {
 });
 SPRITES.mediumAsteroids[0].src = '../assets/asteroids/medium/asteroid_01.png';
 SPRITES.smallAsteroids[0].src = '../assets/asteroids/small/asteroid_01.png';
+SPRITES.voidIron.src = '../assets/asteroids/large/void_iron_01.png';
 SPRITES.riftStalker.src = '../assets/enemies/rift_stalker_01.png';
 SPRITES.riftTendril.src = '../assets/enemies/rift_tendril/rift_tendril_01.png';
 SPRITES.driftMine.src = '../assets/hazards/drift_mine.png';
@@ -839,7 +866,7 @@ const MULT_MAX = 5, MULT_DURATION = 720;   // 12s at 60Hz ticks
 // Extra ships are a milestone, not an income stream: the first costs 50k and
 // every one after that costs 60% more, so late-game scores cannot farm lives.
 const LIFE_FIRST = 50000, LIFE_GROWTH = 1.6;
-const MAX_LIVES = 9;                       // HUD row and difficulty both stop making sense past this
+const MAX_LIVES = 5;                       // was 9 — a full bank of banked ships removed all death pressure by wave 20 (2026-08-07 wave-26 playtest)
 let nextLifeScore = LIFE_FIRST, lifeStep = LIFE_FIRST;
 const MAX_WEAPON_STACK = 3;
 // The top stack level is OVERCHARGE: it is deliberately temporary. ×1 and ×2
@@ -848,6 +875,11 @@ const MAX_WEAPON_STACK = 3;
 // it cannot be the steady state for a whole run. Refreshed by another pickup of
 // the same type, so the reward for collecting at ×3 is more time, not nothing.
 const OVERCHARGE_TIME = 840;   // 14s at 60Hz — dt-scaled, so identical at any refresh rate
+// The ×2 tier decays too, much slower, so a maxed loadout is a resource to
+// maintain rather than a ratchet — a full permanent ×2 kit made waves 11+
+// trivial (2026-08-07 wave-26 playtest). Refreshed the same way: pick the
+// weapon up again. ×1 stays permanent for the life. Kid Mode never decays.
+const TIER2_TIME = 1800;       // 30s at 60Hz — dt-scaled like overcharge
 const OVERCHARGE_KEYS = ['rapid', 'spread', 'pierce'];
 const SHIP_SCALE = 1.18;   // visual only — collision radius stays 14 (forgiving hitbox)
 // ---- Ship skins (STYLE_GUIDE accent-colour system) ----
@@ -904,9 +936,10 @@ let ocBars = {};        // weapon key → the depletion <i>, cached across frame
 function renderWeapons() {
   const w = player.weapons;
   const oc = player.overcharge;
+  const t2 = player.tier2;
   const parts = [];
   for (const k of OVERCHARGE_KEYS) {
-    if (w[k]) parts.push(k + ':' + w[k] + (oc[k] > 0 ? 'o' : ''));
+    if (w[k]) parts.push(k + ':' + w[k] + (oc[k] > 0 ? 'o' : w[k] === 2 && t2[k] > 0 ? 't' : ''));
   }
   const key = parts.join(',');
   // Rebuild the labels only when a stack actually changes; the bars below are
@@ -918,22 +951,40 @@ function renderWeapons() {
     host.textContent = '';
     for (const k of OVERCHARGE_KEYS) {
       if (!w[k]) continue;
+      const isOc = oc[k] > 0;
+      // The ×2 decay reuses the overcharge underline in cyan — same language,
+      // quieter urgency; gold stays reserved for OVERCHARGE.
+      const isT2 = !isOc && w[k] === 2 && t2[k] > 0;
       const span = document.createElement('span');
-      span.className = oc[k] > 0 ? 'wpn oc' : 'wpn';
+      span.className = isOc ? 'wpn oc' : isT2 ? 'wpn t2' : 'wpn';
       span.textContent = k.toUpperCase() + ' ×' + w[k];
-      if (oc[k] > 0) {
+      if (isOc || isT2) {
         const bar = document.createElement('i');
         span.appendChild(bar);
-        ocBars[k] = { bar, span };
+        ocBars[k] = { bar, span, timer: isOc ? oc : t2, max: isOc ? OVERCHARGE_TIME : TIER2_TIME };
       }
       host.appendChild(span);
     }
   }
   for (const k in ocBars) {
-    const { bar, span } = ocBars[k];
-    bar.style.transform = 'scaleX(' + Math.max(0, oc[k] / OVERCHARGE_TIME) + ')';
-    span.classList.toggle('low', oc[k] < 180);
+    const { bar, span, timer, max } = ocBars[k];
+    bar.style.transform = 'scaleX(' + Math.max(0, timer[k] / max) + ')';
+    span.classList.toggle('low', timer[k] < 180);
   }
+  // Cockpit frame mirrors the loadout: the strongest stack sets the glow tier.
+  setFrameGlow(Math.max(w.rapid, w.spread, w.pierce));
+}
+// Cockpit frame glow follows the strongest weapon stack — ×2 warms the cyan
+// edge-light, ×3 floods it gold while OVERCHARGE lasts. Class-swap only; the
+// animated property is the glow layer's opacity (see #hudFrameGlow CSS).
+let displayedFrameGlow = null;
+function setFrameGlow(stack) {
+  const tier = stack >= MAX_WEAPON_STACK ? 3 : stack === 2 ? 2 : 0;
+  if (tier === displayedFrameGlow) return;
+  displayedFrameGlow = tier;
+  const frame = document.getElementById('hudFrame');
+  frame.classList.toggle('stack2', tier === 2);
+  frame.classList.toggle('stack3', tier === 3);
 }
 let displayedMult = null;
 function renderMult() {
@@ -1579,8 +1630,9 @@ const AudioFX = (() => {
       osc('sawtooth', 262, 262, t + 0.5, 0.4, 0.14);
       osc('sawtooth', 392, 392, t + 0.75, 0.7, 0.16);
     },
-    // Crystal shatter: glassy, cold, no low end — a bright noise crack and
-    // two falling chime partials where a rock would thump.
+    // Shell crack: glassy, cold, no low end — a bright noise crack and two
+    // falling chime partials. Layered over the rock boom when a Void Iron
+    // hulk's plating fails, so metal giving way sounds unlike stone breaking.
     shatter(x) {
       if (!ac) return;
       const t = ac.currentTime;
@@ -1829,10 +1881,11 @@ function drawBackground() {
 }
 
 // Weapon power-ups live in `weapons` as stack counts (0–MAX_WEAPON_STACK).
-// Levels 1 and 2 persist across the whole life and only reset when the ship is
-// lost. Level 3 is OVERCHARGE and is timed: `overcharge` holds the frames left
-// at ×3 per weapon, counted down by updateOvercharge().
-const player = { x: 0, y: 0, angle: -Math.PI/2, vx: 0, vy: 0, radius: 14, thrust: false, fireCooldown: 0, invuln: 0, shield: 0, maxShield: 100, weapons: { rapid: 0, spread: 0, pierce: 0 }, overcharge: { rapid: 0, spread: 0, pierce: 0 }, torpedoes: 3, torpedoHeld: false };
+// Level 1 persists across the whole life. Level 2 burns down slowly (`tier2`,
+// TIER2_TIME frames) to ×1 unless refreshed by another pickup. Level 3 is
+// OVERCHARGE and is timed fast: `overcharge` holds the frames left at ×3 per
+// weapon. Both clocks are counted down by updateOvercharge().
+const player = { x: 0, y: 0, angle: -Math.PI/2, vx: 0, vy: 0, radius: 14, thrust: false, fireCooldown: 0, invuln: 0, shield: 0, maxShield: 100, weapons: { rapid: 0, spread: 0, pierce: 0 }, overcharge: { rapid: 0, spread: 0, pierce: 0 }, tier2: { rapid: 0, spread: 0, pierce: 0 }, torpedoes: 3, torpedoHeld: false };
 function resetPlayer() {
   player.x = CX; player.y = CY;
   player.vx = player.vy = 0;
@@ -1844,6 +1897,7 @@ function resetPlayer() {
   // Losing the ship costs the whole loadout and the score multiplier.
   player.weapons.rapid = player.weapons.spread = player.weapons.pierce = 0;
   player.overcharge.rapid = player.overcharge.spread = player.overcharge.pierce = 0;
+  player.tier2.rapid = player.tier2.spread = player.tier2.pierce = 0;
   scoreMult = 1;
   multTimer = 0;
   player.fireCooldown = 0;
@@ -2141,6 +2195,16 @@ function armorFor(size, w) {
   if (size === 2) return tier >= 2 ? 2 : 1;    // mediums harden late only
   return 1;                                     // smalls are always one-shot
 }
+// VOID IRON — the heavy plated rock (large size only). Its own armour curve,
+// well above a normal rock's 1..4, because being a genuine obstacle is the
+// entire species. It replaced the Void Crystals on 2026-08-07: those were the
+// loudest thing on screen but died in one hit, so the look promised a threat
+// the mechanic never delivered. Kid Mode gets a token shell, not a wall.
+function heavyArmorFor(w) {
+  if (kidMode) return 2;
+  const tier = Math.min(3, Math.floor(Math.max(0, w - 11) / 4));   // 0 at 11-14, then 1/2/3
+  return 5 + tier;                                                  // 5..8 hits
+}
 // Fissures in unit space so they tumble with the rock. Only armoured rocks
 // draw them; they brighten as the armour is worn down.
 function generateCracks(n) {
@@ -2155,26 +2219,48 @@ function generateCracks(n) {
   }
   return cracks;
 }
-function spawnAsteroid(x, y, size, speedMult=1, crystal=false) {
+function spawnAsteroid(x, y, size, speedMult=1, heavy=false) {
+  // Void Iron exists only at the large tier. That is a deliberate limit: heavy
+  // children would turn one rock into a six-stage slog, which is exactly the
+  // "spongy" failure the armour system was built to avoid. The shell is the
+  // event; what is inside is ordinary rock.
+  heavy = heavy && size === 3;
   const angle = Math.random()*Math.PI*2;
-  const speed = (0.6 + Math.random()*1.2) * speedMult * (kidMode ? 0.7 : 1);
-  // Crystals are glass cannons: never armoured, they die to one hit — the
-  // threat is what they shatter into, not how long they take to kill.
-  const hp = crystal ? 1 : armorFor(size, wave);
+  // A hulk drifts: heavy rocks are slower and tumble lazily, so the silhouette
+  // has time to register as different before it reaches you.
+  const speed = (0.6 + Math.random()*1.2) * speedMult * (kidMode ? 0.7 : 1) * (heavy ? 0.62 : 1);
+  const hp = heavy ? heavyArmorFor(wave) : armorFor(size, wave);
   const pool = size === 3 ? SPRITES.asteroids : size === 2 ? SPRITES.mediumAsteroids : SPRITES.smallAsteroids;
-  asteroids.push({ x: x ?? Math.random()*W, y: y ?? Math.random()*H, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed, size, radius: size === 3 ? 42 : size === 2 ? 24 : 12, rot: Math.random()*Math.PI*2, rotSpeed: (Math.random()-0.5)*0.04, verts: crystal ? generateCrystalVerts() : generateAsteroidVerts(size), craters: generateCraters(size), hp, maxHp: hp, hitFlash: 0, cracks: hp > 1 ? generateCracks(2 + size) : null, sprite: crystal ? null : pool[Math.floor(Math.random() * pool.length)], crystal });
+  asteroids.push({ x: x ?? Math.random()*W, y: y ?? Math.random()*H, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed, size, radius: heavy ? 48 : size === 3 ? 42 : size === 2 ? 24 : 12, rot: Math.random()*Math.PI*2, rotSpeed: (Math.random()-0.5)*(heavy ? 0.016 : 0.04), verts: heavy ? generateHeavyVerts() : generateAsteroidVerts(size), craters: generateCraters(size), hp, maxHp: hp, hitFlash: 0, cracks: hp > 1 ? generateCracks(heavy ? 6 : 2 + size) : null, plates: heavy ? generatePlates(5 + Math.floor(Math.random()*2)) : null, sprite: pool[Math.floor(Math.random() * pool.length)], heavy });
 }
-// Crystals are cut, not weathered: fewer vertices with harder radius swings
-// give a shard silhouette no tumbling rock could have.
-function generateCrystalVerts() {
-  const n = 6;
+// Void Iron is machined, not weathered: fewer vertices with a much tighter
+// radius spread give long flat faces, so the silhouette reads as a blocky
+// plated hulk rather than a tumbling potato even before the plating draws.
+function generateHeavyVerts() {
+  const n = 8;
   const verts = [];
   for (let i=0; i<n; i++) {
-    const a = (i/n)*Math.PI*2 + (Math.random()-0.5)*0.3;
-    const r = i % 2 === 0 ? 0.95 + Math.random()*0.15 : 0.45 + Math.random()*0.25;
-    verts.push({ a, r });
+    const a = (i/n)*Math.PI*2 + (Math.random()-0.5)*0.10;
+    verts.push({ a, r: 0.92 + Math.random()*0.10 });
   }
   return verts;
+}
+// Armour plates in unit space so they tumble with the hulk. Each is a wedge
+// from an inner hub radius to just short of the rim; the gaps between them are
+// where the crack-energy seams burn through as the shell is worn down.
+function generatePlates(n) {
+  const plates = [];
+  const step = (Math.PI * 2) / n;
+  for (let i = 0; i < n; i++) {
+    const a0 = i * step + (Math.random() - 0.5) * 0.10;
+    plates.push({
+      a0,
+      a1: a0 + step * (0.74 + Math.random() * 0.14),
+      rIn: 0.30 + Math.random() * 0.08,
+      rOut: 0.84 + Math.random() * 0.10
+    });
+  }
+  return plates;
 }
 // Craters are fixed per asteroid in unit space (angle, distance from centre,
 // radius) so they tumble with the rock instead of swimming across it.
@@ -2221,43 +2307,38 @@ function drawAsteroids() {
     ctx.translate(a.x, a.y);
     ctx.rotate(a.rot);
 
-    // Crystals are the deliberate exception to "asteroids never glow": they
-    // are energy in mineral form, drawn as translucent faceted shards with a
-    // plasma-blue edge. Always procedural — the rock sprite would lie.
-    if (a.crystal) {
-      const glow = 0.55 + 0.2 * Math.sin(frame * 0.09 + a.rot * 3);
-      ctx.beginPath();
-      a.verts.forEach((v,i) => {
-        const x = Math.cos(v.a) * a.radius * v.r;
-        const y = Math.sin(v.a) * a.radius * v.r;
-        if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-      });
-      ctx.closePath();
-      const fill = ctx.createRadialGradient(0, 0, a.radius*0.1, 0, 0, a.radius);
-      fill.addColorStop(0, 'rgba(122,200,255,0.30)');
-      fill.addColorStop(0.6, 'rgba(58,123,255,0.18)');
-      fill.addColorStop(1, 'rgba(26,10,46,0.35)');
-      ctx.fillStyle = fill;
-      ctx.fill();
-      ctx.strokeStyle = `rgba(0,245,255,${glow})`;
-      ctx.lineWidth = 1.6;
-      ctx.stroke();
-      // Inner facet lines from alternating points through the centre.
-      ctx.beginPath();
-      a.verts.forEach((v,i) => {
-        if (i % 2) return;
-        ctx.moveTo(0, 0);
-        ctx.lineTo(Math.cos(v.a) * a.radius * v.r, Math.sin(v.a) * a.radius * v.r);
-      });
-      ctx.strokeStyle = `rgba(58,123,255,${glow * 0.5})`;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      if (a.hitFlash > 0) {
-        ctx.globalAlpha = a.hitFlash / 6 * 0.7;
-        ctx.fillStyle = '#FFFFFF';
+    // VOID IRON: a plated hulk. It stays matte like every other rock — the
+    // body must never bloom — and all of its light comes from crack-energy
+    // burning in the seams between its armour plates, brighter as the shell
+    // fails. Dark heavy metal leaking light at the joints.
+    if (a.heavy) {
+      // The dedicated master carries its own plating; the fallback borrows a
+      // standard rock master for the painted look and gets plating drawn on.
+      const baked = spriteReady(SPRITES.voidIron);
+      const master = baked ? SPRITES.voidIron : (spriteReady(a.sprite) ? a.sprite : null);
+      if (master) {
+        const size = a.radius * 2.45;
+        ctx.drawImage(master, -size / 2, -size / 2, size, size);
+      } else {
+        const slab = ctx.createLinearGradient(-a.radius*0.7, -a.radius*0.7, a.radius*0.7, a.radius*0.7);
+        slab.addColorStop(0, '#4A505F');
+        slab.addColorStop(0.55, '#2A2F3B');
+        slab.addColorStop(1, '#141821');
+        ctx.beginPath();
+        a.verts.forEach((v,i) => {
+          const x = Math.cos(v.a) * a.radius * v.r;
+          const y = Math.sin(v.a) * a.radius * v.r;
+          if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        });
+        ctx.closePath();
+        ctx.fillStyle = slab;
         ctx.fill();
-        ctx.globalAlpha = 1;
+        ctx.strokeStyle = 'rgba(10,12,18,0.95)';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
       }
+      if (!baked) drawPlates(a);
+      drawArmor(a);
       ctx.restore();
       continue;
     }
@@ -2313,6 +2394,67 @@ function drawAsteroids() {
 // token exists for. Faint while intact so the armour is telegraphed before you
 // shoot, blazing once the rock is nearly broken. The rock body itself stays
 // matte — only the cracks glow, so asteroids keep their solid read.
+// The Void Iron shell: gunmetal plates bolted over the rock body, with
+// crack-energy burning in the seams between them. Called in the asteroid's
+// own rotated space. Drawn only while no baked Void Iron master exists —
+// real art would carry its own plating and this would double it up.
+function drawPlates(a) {
+  const R = a.radius;
+  const dmg = 1 - a.hp / a.maxHp;
+  // Max channel 100/255 = 0.39 at the brightest stop, just under the postfx
+  // bloom threshold (0.40) — the plating must stay as matte as the rock it is
+  // bolted to. Only the seam energy below is allowed to bloom.
+  const steel = ctx.createLinearGradient(-R*0.6, -R*0.6, R*0.6, R*0.6);
+  steel.addColorStop(0, '#4E5464');
+  steel.addColorStop(0.5, '#2E3440');
+  steel.addColorStop(1, '#171B24');
+  ctx.lineJoin = 'round';
+  for (const p of a.plates) {
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(p.a0) * R * p.rIn, Math.sin(p.a0) * R * p.rIn);
+    ctx.lineTo(Math.cos(p.a0) * R * p.rOut, Math.sin(p.a0) * R * p.rOut);
+    ctx.arc(0, 0, R * p.rOut, p.a0, p.a1);
+    ctx.lineTo(Math.cos(p.a1) * R * p.rIn, Math.sin(p.a1) * R * p.rIn);
+    ctx.arc(0, 0, R * p.rIn, p.a1, p.a0, true);
+    ctx.closePath();
+    ctx.fillStyle = steel;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(9,11,17,0.95)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // Bolt heads at the plate's inner corners — the detail that sells it as
+    // fabricated rather than fractured.
+    for (const ang of [p.a0, p.a1]) {
+      ctx.beginPath();
+      ctx.arc(Math.cos(ang) * R * (p.rIn + 0.07), Math.sin(ang) * R * (p.rIn + 0.07), 1.5, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(120,128,145,0.5)';
+      ctx.fill();
+    }
+  }
+  // Seam energy in the gaps. Faint while the shell is intact so the armour is
+  // telegraphed before you shoot it, blazing once it is nearly broken — the
+  // same contract the standard armour fissures make.
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = `rgba(0,255,204,${0.14 + dmg * 0.72})`;
+  ctx.lineWidth = 1.2 + dmg * 2.2;
+  ctx.lineCap = 'round';
+  for (let i = 0; i < a.plates.length; i++) {
+    const p = a.plates[i];
+    const next = a.plates[(i + 1) % a.plates.length];
+    const gap = (p.a1 + (next.a0 + (i === a.plates.length - 1 ? Math.PI*2 : 0))) * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(gap) * R * p.rIn, Math.sin(gap) * R * p.rIn);
+    ctx.lineTo(Math.cos(gap) * R * p.rOut, Math.sin(gap) * R * p.rOut);
+    ctx.stroke();
+  }
+  // Hub ring: the core the plates are anchored to, lit by the same energy.
+  ctx.lineWidth = 1 + dmg * 1.6;
+  ctx.beginPath();
+  ctx.arc(0, 0, R * 0.26, 0, Math.PI*2);
+  ctx.stroke();
+  ctx.restore();
+}
 function drawArmor(a) {
   if (a.maxHp <= 1) return;
   const dmg = 1 - a.hp / a.maxHp;
@@ -2341,8 +2483,8 @@ function drawArmor(a) {
 }
 // Powerup drop roll, shared by split and vaporise. Weapon types split the
 // remaining probability evenly so the three buffs stay equally common.
-function maybeDropPowerup(x, y) {
-  if (Math.random() >= (kidMode ? 0.22 : 0.12)) return;
+function maybeDropPowerup(x, y, chance) {
+  if (Math.random() >= (chance ?? (kidMode ? 0.22 : 0.12))) return;
   const roll = Math.random();
   const type = roll < 0.32 ? 'shield'
     : roll < 0.52 ? 'torpedo'
@@ -2352,24 +2494,27 @@ function maybeDropPowerup(x, y) {
   powerups.push({ x, y, vx: (Math.random()-0.5)*1.5, vy: (Math.random()-0.5)*1.5, type, life: 400, radius: 12 });
 }
 function splitAsteroid(a, idx, playSound=true) {
-  if (a.crystal) {
-    // Crystals shatter, not burn: a cold white-cyan-blue burst with no embers.
-    spawnParticles(a.x, a.y, 12 + a.size*6, '#FFFFFF', 8, 12, 1.8);
-    spawnParticles(a.x, a.y, 20 + a.size*10, '#00F5FF', 6, 26, 2.4);
-    spawnParticles(a.x, a.y, 14 + a.size*8, '#3A7BFF', 4, 38, 2.6);
-    if (playSound) AudioFX.shatter(a.x);
-    shake = Math.max(shake, 8 + a.size*4);
-    flash = 0.35;
-    hitStop = Math.max(hitStop, 1 + a.size * 1.2);
-    addScore(a.size * 75 * wave);   // riskier than rock, pays better
-    // The whole point of the species: a large crystal skips the medium tier
-    // and bursts into six fast slivers — SPREAD and PIERCE earn their keep.
-    if (a.size === 3) {
-      for (let i=0; i<6; i++) spawnAsteroid(a.x, a.y, 1, 2.4, true);
-    } else if (a.size === 2) {
-      for (let i=0; i<3; i++) spawnAsteroid(a.x, a.y, 1, 2.2, true);
-    }
-    maybeDropPowerup(a.x, a.y);
+  if (a.heavy) {
+    // The shell fails: seam energy vents first, then the plating blows apart
+    // as gunmetal shrapnel over a normal rock fireball. The bright crack rides
+    // on top of the boom — the sound of metal giving way, not stone breaking.
+    spawnParticles(a.x, a.y, 30, '#FFFFFF', 9, 14, 2);
+    spawnParticles(a.x, a.y, 46, '#00FFCC', 6.5, 34, 2.8);   // the vented seams
+    spawnParticles(a.x, a.y, 38, '#FFD23F', 5, 30, 3);
+    spawnParticles(a.x, a.y, 42, '#FF5E00', 3.4, 42, 3.2);
+    spawnParticles(a.x, a.y, 40, '#6A6A7A', 5.2, 46, 2.6);   // plate shrapnel
+    if (playSound) { AudioFX.boom(3, a.x); AudioFX.shatter(a.x); }
+    shake = Math.max(shake, 26);
+    flash = 0.5;
+    hitStop = Math.max(hitStop, 7);
+    // Pays the best in the field: it costs the most time and the most exposure.
+    addScore(a.size * 130 * wave);
+    // Cracking the shell is the event — what spills out is ordinary rock, so
+    // the entity budget matches a normal large and nothing turns spongy.
+    for (let i=0; i<2; i++) spawnAsteroid(a.x, a.y, 2, 1.3);
+    // A reliable resupply, unlike a normal rock's 12%. That is the whole
+    // risk/reward: spend the time cracking the hulk and you get refuelled.
+    maybeDropPowerup(a.x, a.y, kidMode ? 0.85 : 0.65);
     asteroids.splice(idx, 1);
     return;
   }
@@ -2628,11 +2773,20 @@ function drawEnemies() {
         ctx.beginPath(); ctx.moveTo(width*0.34, -height*0.18); ctx.lineTo(width*0.50, 0); ctx.lineTo(width*0.34, height*0.18); ctx.stroke();
       }
       if ((e.tier || 1) > 1) {
-        // Tier armour reads as a few hot seams, not a whole new silhouette.
-        ctx.strokeStyle = `rgba(255,0,170,${0.25 + e.tier * 0.08})`;
-        ctx.lineWidth = 1.1;
+        // Tier armour reads as hot seams plus the same tail rank chevrons the
+        // Stalker wears (tier 2 = one, tier 3 = two). Marks, not glow — the
+        // core swell must stay exclusively the attack tell.
+        ctx.strokeStyle = `rgba(255,0,170,${0.38 + e.tier * 0.10})`;
+        ctx.lineWidth = 1.4;
         for (const y of [-height * 0.19, height * 0.19]) {
           ctx.beginPath(); ctx.moveTo(width * 0.18, y); ctx.lineTo(width * 0.34, y * 0.56); ctx.stroke();
+        }
+        ctx.lineWidth = 2.4;
+        for (let i = 0; i < e.tier - 1; i++) {
+          const bx = -width * 0.28 - i * 12;
+          ctx.beginPath();
+          ctx.moveTo(bx, -9); ctx.lineTo(bx - 9, 0); ctx.lineTo(bx, 9);
+          ctx.stroke();
         }
       }
       ctx.restore();
@@ -2650,14 +2804,25 @@ function drawEnemies() {
       ctx.globalAlpha = 0.9 + pulse * 0.1;
       ctx.drawImage(SPRITES.riftStalker, -size / 2, -size / 2, size, size);
       if ((e.tier || 1) > 1) {
-        const tierGlow = 4.5 + (e.tier - 1) * 2.2 + pulse * 1.5;
-        const core = ctx.createRadialGradient(0, 0, 0.5, 0, 0, tierGlow);
-        core.addColorStop(0, 'rgba(255,255,255,0.80)');
-        core.addColorStop(0.35, 'rgba(255,0,170,0.48)');
+        // Tier must read at combat distance (2026-08-07 playtest: nobody
+        // noticed the old 5px core tint). A real aura plus rank chevrons on
+        // the tail: tier 2 wears one, tier 3 two.
+        const aura = 13 + (e.tier - 1) * 6 + pulse * 3;
+        const core = ctx.createRadialGradient(0, 0, 0.5, 0, 0, aura);
+        core.addColorStop(0, 'rgba(255,255,255,0.55)');
+        core.addColorStop(0.3, 'rgba(255,0,170,0.40)');
         core.addColorStop(1, 'rgba(255,0,170,0)');
         ctx.globalCompositeOperation = 'lighter';
         ctx.fillStyle = core;
-        ctx.beginPath(); ctx.arc(0, 0, tierGlow, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(0, 0, aura, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = `rgba(255,0,170,${0.55 + pulse * 0.45})`;
+        ctx.lineWidth = 2;
+        for (let i = 0; i < e.tier - 1; i++) {
+          const bx = -size * 0.30 - i * 8;
+          ctx.beginPath();
+          ctx.moveTo(bx, -6); ctx.lineTo(bx - 6, 0); ctx.lineTo(bx, 6);
+          ctx.stroke();
+        }
       }
       ctx.restore();
       continue;
@@ -2703,6 +2868,18 @@ function drawEnemies() {
     ctx.fillStyle = core;
     ctx.fill();
 
+    // Same tier rank chevrons as the sprite path, in the manta's 48-unit space.
+    if ((e.tier || 1) > 1) {
+      ctx.strokeStyle = `rgba(255,0,170,${0.55 + pulse * 0.45})`;
+      ctx.lineWidth = 1.4;
+      for (let i = 0; i < e.tier - 1; i++) {
+        const bx = -14 - i * 6;
+        ctx.beginPath();
+        ctx.moveTo(bx, -4.5); ctx.lineTo(bx - 4.5, 0); ctx.lineTo(bx, 4.5);
+        ctx.stroke();
+      }
+    }
+
     ctx.restore();
   }
 }
@@ -2740,7 +2917,7 @@ function spawnMine() {
   do { x = Math.random()*W; y = Math.random()*H; tries++; }
   while (Math.hypot(x-player.x, y-player.y) < 240 && tries < 50);
   mines.push({ x, y, vx: (Math.random()-0.5)*0.5, vy: (Math.random()-0.5)*0.5,
-    radius: 11, fuse: -1, seed: Math.random()*Math.PI*2 });
+    radius: 14, fuse: -1, seed: Math.random()*Math.PI*2 });   // was 11 — too easy to lose against the void (2026-08-07 playtest)
 }
 function spawnWell() {
   let x, y, tries = 0;
@@ -2863,6 +3040,17 @@ function drawMines() {
     const pulse = armed
       ? (Math.floor(frame / 3) % 2 ? 1 : 0.25)              // hard strobe
       : 0.45 + 0.25 * Math.sin(frame * 0.06 + m.seed);      // idle breathing
+    // Lethal terrain advertises: a soft magenta halo behind the body, breathing
+    // while idle, strobing with the core once armed. Kept low-alpha so the void
+    // around it stays almost black.
+    const haloR = m.radius * (armed ? 2.6 : 2.2);
+    const halo = ctx.createRadialGradient(0, 0, m.radius * 0.4, 0, 0, haloR);
+    halo.addColorStop(0, `rgba(255,0,170,${0.10 + pulse * 0.24})`);
+    halo.addColorStop(1, 'rgba(255,0,170,0)');
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(0, 0, haloR, 0, Math.PI*2); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
     if (spriteReady(SPRITES.driftMine)) {
       const size = m.radius * 3.2;
       ctx.drawImage(SPRITES.driftMine, -size / 2, -size / 2, size, size);
@@ -2887,7 +3075,7 @@ function drawMines() {
       }
     }
     ctx.beginPath();
-    ctx.arc(0, 0, 3.2, 0, Math.PI*2);
+    ctx.arc(0, 0, 4, 0, Math.PI*2);
     ctx.fillStyle = `rgba(255,0,170,${0.25 + pulse * 0.75})`;
     ctx.fill();
     if (armed) {
@@ -3151,7 +3339,10 @@ function updateBoss() {
     boss.spitCd -= dt;
     if (boss.spitCd <= 0 && asteroids.length < 10) {
       boss.spitCd = phase === 1 ? 300 : 380;
-      spawnAsteroid(boss.x, boss.y, 2, 1.4, wave >= 20 && Math.random() < 0.3);
+      // Plain mediums only. Void Iron is a large-tier species, and the boss
+      // fight is already the heaviest scene in the game — it does not get a
+      // second slow-to-kill object competing for the player's attention.
+      spawnAsteroid(boss.x, boss.y, 2, 1.4);
       spawnParticles(boss.x, boss.y, 10, '#FF00AA', 3, 20, 2);
     }
     if (phase >= 2) {
@@ -3585,9 +3776,10 @@ function updateSpecialSpawns() {
   }
 }
 
-// Burn the OVERCHARGE (×3) tier down to ×2. Paused during the wave tally for
-// the same reason the special-spawn timers are — the breather is not play time,
-// and losing the buff while watching a bonus count up would read as a cheat.
+// Burn the OVERCHARGE (×3) tier down to ×2, and the ×2 tier down to ×1 on its
+// own slower clock. Paused during the wave tally for the same reason the
+// special-spawn timers are — the breather is not play time, and losing a buff
+// while watching a bonus count up would read as a cheat.
 function updateOvercharge() {
   if (waveTransition) return;
   for (const k of OVERCHARGE_KEYS) {
@@ -3596,7 +3788,18 @@ function updateOvercharge() {
     if (player.overcharge[k] <= 0) {
       player.overcharge[k] = 0;
       player.weapons[k] = MAX_WEAPON_STACK - 1;
+      if (!kidMode) player.tier2[k] = TIER2_TIME;
       addToast(k.toUpperCase() + ' OVERCHARGE SPENT  ×2', '#FF5E00');
+      AudioFX.overchargeEnd();
+    }
+  }
+  for (const k of OVERCHARGE_KEYS) {
+    if (player.tier2[k] <= 0 || player.weapons[k] !== 2) continue;
+    player.tier2[k] -= dt;
+    if (player.tier2[k] <= 0) {
+      player.tier2[k] = 0;
+      player.weapons[k] = 1;
+      addToast(k.toUpperCase() + ' FADED  ×1', '#FF5E00');
       AudioFX.overchargeEnd();
     }
   }
@@ -3736,9 +3939,29 @@ function checkCollisions() {
   // Shield-ramming an asteroid destroys it (full split, scores normally) at a
   // fixed shield cost. One per frame: splitAsteroid mutates the array, so we
   // handle the first hit and break rather than keep iterating stale indices.
+  // A Void Iron hulk is the exception: ramming only staves in two plates and
+  // bounces you off. Letting the shield delete an 8-hit hulk for 23 charge
+  // would hand the player a free answer to the one rock built to be work.
   for (let ai = asteroids.length - 1; ai >= 0; ai--) {
     const a = asteroids[ai];
-    if (Math.hypot(player.x-a.x, player.y-a.y) < a.radius + player.radius) {
+    const contactDist = Math.hypot(player.x-a.x, player.y-a.y);
+    if (contactDist < a.radius + player.radius) {
+      if (shielding && a.heavy) {
+        player.shield = Math.max(0, player.shield - 30);
+        spawnParticles(player.x, player.y, 15, '#3A7BFF', 4, 25, 3);
+        AudioFX.shieldHit();
+        // Bounce clear, or the overlap chips it every frame and burns the
+        // whole bar in half a second. Dead-centre contact has no meaningful
+        // normal, so fall back to the ship's heading — any consistent
+        // direction will do, but a zero vector would leave it stuck inside.
+        const nx = contactDist < 0.001 ? Math.cos(player.angle) : (player.x - a.x) / contactDist;
+        const ny = contactDist < 0.001 ? Math.sin(player.angle) : (player.y - a.y) / contactDist;
+        player.x = a.x + nx * (a.radius + player.radius + 3);
+        player.y = a.y + ny * (a.radius + player.radius + 3);
+        player.vx += nx * 2.6; player.vy += ny * 2.6;
+        damageAsteroid(a, ai, 2);
+        break;
+      }
       if (shielding) {
         player.shield = Math.max(0, player.shield - (8 + a.size * 5));
         spawnParticles(player.x, player.y, 15, '#3A7BFF', 4, 25, 3);
@@ -3853,9 +4076,11 @@ function collectPowerups() {
         if (w[p.type] === MAX_WEAPON_STACK) {
           const refresh = player.overcharge[p.type] > 0;
           player.overcharge[p.type] = OVERCHARGE_TIME;
+          player.tier2[p.type] = 0;   // overcharge owns the clock at ×3; ×2 gets a fresh one when it expires
           addToast(p.type.toUpperCase() + (refresh ? ' OVERCHARGE +14s' : ' OVERCHARGED'), '#FFD23F');
           AudioFX.multiplierPickup();
         } else {
+          if (w[p.type] === 2 && !kidMode) player.tier2[p.type] = TIER2_TIME;
           addToast(p.type.toUpperCase() + ' ×' + w[p.type], p.type === 'pierce' ? '#3A7BFF' : '#00F5FF');
           AudioFX.pickup();
         }
@@ -3972,9 +4197,11 @@ function startWave() {
       x = Math.random()*W; y = Math.random()*H;
       tries++;
     } while (Math.hypot(x-CX, y-CY) < 180 && tries < 50);
-    // From wave 11 roughly a fifth of the big rocks are crystal — enough to
-    // change how a wave clears, not enough to change what the game is.
-    spawnAsteroid(x, y, 3, 1, wave >= 11 && Math.random() < 0.22);
+    // Void Iron arrives at wave 11 — exactly where a maxed loadout used to
+    // turn the game into a victory lap — and its share of the field grows
+    // slowly, so late waves escalate in texture rather than in rock count.
+    const ironShare = Math.min(0.30, 0.18 + (wave - 11) * 0.01);
+    spawnAsteroid(x, y, 3, 1, wave >= 11 && Math.random() < ironShare);
   }
   // Rift Stalkers arrive from wave 3, one at first, capped at 3, spaced well
   // apart — pressure, not a swarm.
@@ -4051,6 +4278,9 @@ function endGame() {
   hideTally();
   clearToasts();
   state = State.GAMEOVER;
+  // The cockpit frame stays visible behind the game-over screen, but
+  // renderWeapons stops running there — clear the glow tier explicitly.
+  setFrameGlow(0);
   AudioFX.setMusic(false);
   AudioFX.gameOver();
   document.getElementById('finalScore').textContent = score.toLocaleString();

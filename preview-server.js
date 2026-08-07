@@ -5,7 +5,7 @@ const path = require('path');
 const ROOT = __dirname;
 const HOST = '127.0.0.1';
 const portArg = process.argv.find(arg => arg.startsWith('--port='));
-const PORT = portArg ? Number(portArg.slice('--port='.length)) : 4173;
+const PORT = portArg ? Number(portArg.slice('--port='.length)) : Number(process.env.PORT) || 4173;
 
 const MIME = {
   '.css': 'text/css; charset=utf-8',
