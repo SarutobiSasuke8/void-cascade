@@ -357,3 +357,38 @@ the difficulty pass — no generated art, no generator.
 **Nothing in this build has been played.** Logic, rendering and frame-rate independence
 are verified; the balance of four simultaneous difficulty changes is not. The commit is
 a restore point, not a statement that the tuning is right.
+
+---
+
+## Update — 2026-08-08: ×2 decay was invisible, not absent
+
+Owner reported the ×2 decay "not appearing to be in the current build". It was:
+verified end to end through the real path on the deployed build — two RAPID pickups
+seeded `tier2 = 1800`, and stepping the frame loop dropped the stack to ×1 at exactly
+1800 frames (30.0s). `updateOvercharge()` is wired at the frame loop, and the live
+GitHub Pages file contains `TIER2_TIME`, the decay loop and the FADED toast.
+
+**The mechanic worked; the HUD did not communicate it.** Two design faults, both mine:
+
+1. **No track behind the depletion bar.** The fill scaled from a full-width bar with
+   nothing behind it, so a half-drained bar was just a shorter line with no reference
+   for "half of what". ×3 had the same flaw but survived it because the whole chip
+   turns gold and announces itself.
+2. **The ×2 chip had no state change at all** — a 2px cyan bar under cyan text at 0.85
+   opacity, visually identical to a plain ×1 chip. Nothing said "this is timed".
+
+Fix: a `::before` rail (`rgba(255,255,255,0.18)`, 3px, full width) behind the fill on
+both `.oc` and `.t2` so the drain reads against a constant width; `.wpn.t2` lifted to
+opacity 1 with a soft cyan text-shadow so the chip announces a running clock. Bar
+height 2px → 3px, padding 3px → 5px. Gold stays reserved for OVERCHARGE.
+
+Verified by computed style at five states (×1, ×2 at 100/50/7%, ×3): rail present and
+constant at 63.25px on both timed tiers, absent on plain ×1, fill scaling 1.0 → 0.5 →
+0.07, `low` blink class engaging in the final 3s. Pane still cannot composite, so this
+is style-verified, not eyeballed.
+
+**Second possibility still open.** Even working and now visible, the decay may barely
+bite: at ~98 destructions per wave 11+, a 12% drop rate and three weapons splitting
+16% each, a *specific* weapon drops roughly every 40s of play against a 30s timer that
+every pickup resets to full. If the fade still does not change how waves feel,
+`TIER2_TIME` is the knob — 1200 (20s) puts it comfortably inside the pickup interval.
