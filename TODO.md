@@ -36,6 +36,14 @@ in chat or a session log. Keep it short — this is a queue, not an archive.
       the game. No frame-time figure in the session logs is trustworthy: those loops
       omitted `drawBackground()`, and the preview pane cannot composite, so rAF-based
       measurement is impossible there. If it stutters, cut the phase-2 adds first.
+- [ ] **Eyeball the cockpit glow tiers** (2026-08-08): ×2 = cyan lift at 0.45 opacity,
+      ×3 = gold pulse. Verified by computed-style probes only — the preview pane cannot
+      composite, so nobody has *seen* it yet. Knobs: the two `#hudFrameGlow` filter
+      lines and the `.stack2` opacity in `play/index.html`.
+- [ ] Preview server serves `play/index.html` at `/` without redirecting, so the root
+      URL loads the game with broken relative paths (`postfx.js`, `../assets` → 404s
+      and a `createPostFX` console error). Harmless at `/play/`, but it pollutes the
+      console log. Fix: 302 `/` → `/play/` in `preview-server.js`.
 - [ ] Collision tests must fire projectiles from outside with real velocity, stepped
       through `updateBullets()`. Placing a bullet on its target tests nothing about
       reachability — that mistake hid the invincible-boss bug through a "passing" test.

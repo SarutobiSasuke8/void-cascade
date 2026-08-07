@@ -32,15 +32,14 @@ game is always playable — a missing sprite is a downgrade, never a crash.
 | Large asteroid 01 | `asteroids/large/asteroid_01.png` | ✅ | One master serves all three sizes |
 | Asteroid variants 02–04 | `asteroids/large/asteroid_02..04.png` | ✅ | Three distinct matte-rock silhouettes; picked randomly per non-crystal rock |
 | Medium / small tiers | `asteroids/medium/asteroid_01.png`, `asteroids/small/asteroid_01.png` | ✅ | Dedicated compact and jagged masters now render at their respective tiers |
-| **Void Iron (heavy)** | `asteroids/large/void_iron_01.png` | 🔲 **wanted** | **Top art priority.** Large tier only, drawn at radius 48 (~235px). See the brief below — the code already looks for this path and swaps to it automatically |
+| **Void Iron (heavy)** | `asteroids/large/void_iron_01.png` | ✅ | Dedicated large-tier master; drawn at radius 48 and selected automatically by the existing sprite manifest |
 | Crystal asteroid | — | ❌ dropped | Species removed 2026-08-07 (1 hp made the glow a lie). Do **not** generate crystal art; Void Iron replaced it |
 
 ### Art brief — Void Iron (`asteroids/large/void_iron_01.png`)
 
-The one outstanding gameplay sprite. It renders today from a procedural fallback (a
-standard rock master with plating drawn over it), so this is an upgrade, not a blocker —
-but a dedicated master is what the species deserves. Drop the file at that exact path
-and the renderer picks it up and stops drawing its own plating.
+The dedicated gameplay sprite is now in place. The procedural fallback (a standard
+rock master with plating drawn over it) remains for browser previews where images
+cannot be loaded safely.
 
 - **Read in one glance: this rock is armoured and it will take work.** It sits in the
   same field as four weathered grey rocks and must never be mistaken for one.

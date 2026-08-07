@@ -456,7 +456,7 @@
     opacity: 0.92;
     filter: drop-shadow(0 0 7px rgba(0,245,255,0.22));
   }
-  /* Weapon-stack glow tiers (2026-08-07). A second copy of the frame carries a
+  /* Weapon-stack glow tiers (2026-08-08). A second copy of the frame carries a
      stronger pre-baked drop-shadow and fades in over the base, so the animated
      property is compositor-only opacity — never a live filter animation on a
      full-screen image. ×2 lifts the cyan edge-light; ×3 floods it gold (the
@@ -740,9 +740,9 @@ const SPRITES = {
   asteroids: [new Image(), new Image(), new Image(), new Image()],
   mediumAsteroids: [new Image()],
   smallAsteroids: [new Image()],
-  // Void Iron: the heavy plated rock. Until this master exists the renderer
-  // falls back to a standard rock master with procedural plating drawn over
-  // it, so the species is legible today and swaps to baked art for free.
+  // Void Iron: the heavy plated rock. Its dedicated master carries the
+  // armour plates; the renderer retains a procedural fallback for any
+  // browser preview that cannot load the image.
   voidIron: new Image(),
   riftStalker: new Image(),
   riftTendril: new Image(),
