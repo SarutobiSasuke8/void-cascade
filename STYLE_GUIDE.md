@@ -85,8 +85,18 @@ large 1→4 hits, medium 1→2 hits, small always one-shot. Kid Mode never gets 
   protecting the playfield from stacking too many active enemy threats.
 - Behaviour: slow drift → bright core swell / locked heading → fast prow-first
   ram → recovery. It does not fire bullets; the core swell is the dodge tell.
-- Starts at 5 hits and gains only one hit plus a small ram-speed step every five
-  waves. A full-health Tendril survives one torpedo direct hit.
+- Starts at 5 hits and survives one torpedo direct hit. Tier 2 begins on wave
+  11 after the wave-10 boss; Tier 3 begins on wave 21 after the wave-20 boss.
+  Each tier adds one hit, a small ram-speed increase and reduced recovery.
+
+## Enemy Tiers (added 2026-08-07)
+- Tier 1: waves 3-10. Rift Stalkers have 2 HP; Rift Tendrils have 5 HP.
+- Tier 2: waves 11-20. Rift Stalkers gain 3 HP, quicker steering and refire;
+  Rift Tendrils gain 6 HP, a faster ram and shorter recovery.
+- Tier 3: wave 21 onward. The same familiar enemies sharpen again (4 / 7 HP)
+  without increasing their on-screen caps or introducing a new swarm type.
+- Tier effects are readable, not noisy: brighter magenta cores and restrained
+  extra armour seams signal the upgraded threat.
 
 ## Particle Systems (priority juice)
 1. Thruster ribbons (continuous while thrusting)
@@ -270,6 +280,13 @@ Every 10th wave, replacing the normal spawn table (4 rocks, no stalkers/tendril/
   tier = wave/10). Plating is absolutely invulnerable — PIERCE does not go through —
   so the ring's rotation is the aiming puzzle. Torpedo hits land 2 damage on the
   nearest living node through the armour.
+- Ringed by a crown of magenta-veined tentacles around the full circumference — slow,
+  deliberate anchor limbs, not the Rift Tendril's chaotic grasping. Visual/lore only
+  (see `Rift Stalker Lore` in the vault): they read as the most coordinated act of will
+  the Rift is still capable of, distinguishing the Core from every lesser unit. Matte
+  gunmetal roots tapering to glowing magenta tips; no gameplay hitbox or behaviour of
+  their own unless/until sprite work lands and play-feel says otherwise — do not wire
+  them into collision or damage without a separate decision.
 - Phases by surviving nodes: 4–3 spits medium rocks (crystal-capable from wave 20);
   at 2 it adds a 10-bullet radial ring with real gaps; at 1 it **charges across the
   field and re-enters through the screen wrap** — locked magenta bearing-line
@@ -357,6 +374,47 @@ the swell stays exclusively the attack tell. It cannot ram until it is properly
 on-field *and* its entry timer has run — measured ~3s to arrive, ~6s to the first ram.
 The entrance is the introduction; a heavy setpiece that spawns already charging reads
 as a cheap shot.
+
+## Revisions — 2026-08-07 (third pass)
+
+- **The reference grid is gone for good.** It read as a floor under the void and
+  fought the deep-space look. The parallax starfield is the motion reference.
+  Do not reinstate it.
+- **Nebula palette follows the music.** Each track has a mood — theme violet (268°),
+  Hangar Full Burn cold blue (205°), Maximum Thrust teal (168°), boss magenta (330°) —
+  eased over roughly two seconds so a track change reads as a new region of space, not
+  a cut. All moods stay in the cold end of the wheel and the void stays near-black.
+- **Music picker** on the menu: AUTO (rotate by wave) or a forced track, persisted in
+  `localStorage.vc_track`. The boss track is never selectable — the fight owns its
+  music and always overrides the choice.
+- **Pause shows the instruments.** Both the cockpit frame and the HUD sit above the
+  pause veil, so a paused game still reads as a cockpit rather than a menu.
+- **Menu hints are in normal flow.** `#audioHint` and `#pauseHint` used to be
+  absolutely positioned at the bottom of the screen, and every new menu component
+  eventually landed on top of them. Screens now scroll rather than clip, and centre
+  via `:first-child { margin-top: auto }` so short windows stay reachable.
+
+## Boss escalation (added 2026-08-07)
+
+The Core calls in support as it loses health, so the fight gets harder exactly as the
+player gets closer to winning. Thresholds are on total remaining node HP:
+
+| Phase | Health | Reinforcements |
+|---|---|---|
+| 0 | full → 2/3 (arrives with the boss waking) | 3 Rift Stalkers |
+| 1 | 2/3 → 1/3 | 2 Rift Tendrils |
+| 2 | final third | 2 more Stalkers **and** 2 more Tendrils |
+
+Totals 5 Stalkers and 4 Tendrils by the end. Spawns are staggered (700ms between
+Stalkers, 1100ms between Tendrils) so the field never gains a squadron in one frame.
+**This is the heaviest load the game ever puts on screen** — if late boss phases
+stutter, cutting the phase-2 adds is the first lever.
+
+**Nodes must stay reachable.** `NODE_DIST + NODE_R` must exceed `BOSS_RADIUS`, so a
+bullet touches a node before it touches plating. Nodes originally orbited at 62 inside
+an 86 armour radius, which made the boss literally unkillable by gunfire — every shot
+was absorbed 28px short of a node. Node hits are also tested *before* the armour check
+for the same reason.
 
 ## Modding
 Keep a consistent folder structure for art/sound packs so future native ports stay drop-in compatible. The browser prototype is currently fully procedural (zero external assets) so it runs instantly.

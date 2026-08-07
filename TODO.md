@@ -5,6 +5,15 @@ in chat or a session log. Keep it short — this is a queue, not an archive.
 
 ## Now
 
+- [ ] **Playtest the wave-10 boss fight for frame rate.** It now spawns up to 9 adds
+      (5 Rift Stalkers + 4 Rift Tendrils) on top of the boss — the heaviest scene in
+      the game. No frame-time figure in the session logs is trustworthy: those loops
+      omitted `drawBackground()`, and the preview pane cannot composite, so rAF-based
+      measurement is impossible there. If it stutters, cut the phase-2 adds first.
+- [ ] Collision tests must fire projectiles from outside with real velocity, stepped
+      through `updateBullets()`. Placing a bullet on its target tests nothing about
+      reachability — that mistake hid the invincible-boss bug through a "passing" test.
+
 - [ ] Audio mix balance — set by ear once the theme and SFX can actually be monitored;
       current levels were set blind (no audio monitoring in the browser pane). Now also
       covers: mine beeps, crystal shatter, boss alarm/death, overcharge power-down.

@@ -61,7 +61,17 @@
     background: radial-gradient(ellipse at center, rgba(26,10,46,0.85) 0%, rgba(5,1,10,0.95) 70%);
     pointer-events: auto;
     transition: opacity 0.4s ease;
+    /* Short windows must scroll rather than clip. Without this the menu logo
+       was cut off above the top edge at 1280x620. */
+    overflow-y: auto;
+    padding: 1.2rem 1rem;
   }
+  /* Centre when there is room, scroll from the top when there is not. Plain
+     `justify-content: center` overflows in BOTH directions in a flex column,
+     which makes the clipped top unreachable even with overflow-y: auto. */
+  .screen { justify-content: flex-start; }
+  .screen > :first-child { margin-top: auto; }
+  .screen > :last-child { margin-bottom: auto; }
   #menu {
     background:
       radial-gradient(ellipse at center, rgba(5,1,10,0.10) 0%, rgba(5,1,10,0.42) 58%, rgba(5,1,10,0.78) 100%),
@@ -73,7 +83,11 @@
      cockpit never vanishes mid-flight. The frame is pointer-events: none, so
      the RESUME/QUIT buttons stay clickable underneath it. */
   #pause { background: rgba(5, 1, 10, 0.55); }
+  /* Pause is a veil over a frozen playfield, so the instruments stay readable:
+     the cockpit frame AND the HUD both sit above it. Neither takes pointer
+     events, so RESUME/QUIT stay clickable underneath. */
   body.paused #hudFrame { z-index: 12; }
+  body.paused .hud { z-index: 12; }
   .logo {
     font-size: clamp(2.5rem, 8vw, 5.5rem);
     font-weight: 900;
@@ -96,6 +110,10 @@
   }
   #menu .logo img {
     display: block;
+    /* Height-capped so a short window shrinks the banner instead of pushing
+       the buttons off-screen. */
+    max-height: 26vh;
+    object-fit: contain;
     width: 100%;
     height: auto;
     filter: drop-shadow(0 0 22px rgba(0, 245, 255, 0.25));
@@ -225,19 +243,37 @@
   }
   .skin-swatch:hover { transform: scale(1.15); }
   .skin-swatch.sel { border-color: #FFFFFF; box-shadow: 0 0 12px var(--sw); transform: scale(1.15); }
+  .track-btn {
+    background: transparent;
+    border: 1px solid rgba(0,245,255,0.45);
+    color: #00F5FF;
+    font-family: inherit;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    padding: 0.35rem 0.9rem;
+    cursor: pointer;
+    min-width: 13rem;
+    transition: background 0.15s, box-shadow 0.15s;
+  }
+  .track-btn:hover { background: rgba(0,245,255,0.13); box-shadow: 0 0 14px rgba(0,245,255,0.3); }
+  /* Both hints are the last children of #menu and sit in NORMAL FLOW. They
+     used to be absolutely positioned at the bottom of the screen, which meant
+     every new menu component (kid-mode toggle, then the SHIP swatches) landed
+     on top of them. In flow they can never be overlapped. */
   #pauseHint {
-    position: absolute;
-    bottom: 1.5rem;
+    margin-top: 0.9rem;
     font-size: 0.7rem;
     opacity: 0.4;
     letter-spacing: 0.15em;
+    text-align: center;
   }
   #audioHint {
-    position: absolute;
-    bottom: 3.2rem;
+    margin-top: 0.7rem;
     font-size: 0.65rem;
     letter-spacing: 0.25em;
     color: #FFD23F;
+    text-align: center;
     animation: hintPulse 1.6s ease-in-out infinite;
   }
   @keyframes hintPulse { 50% { opacity: 0.35; } }
@@ -343,6 +379,58 @@
     10%  { opacity: 1; transform: translateY(0); }
     72%  { opacity: 1; transform: translateY(0); }
     100% { opacity: 0; transform: translateY(-16px); }
+  }
+  /* Boss health bar. DOM, not canvas, for the same reason as the tally: bloom
+     would blow the text out. Sits high enough to stay clear of the playfield. */
+  /* Boss bar sits in the gap BETWEEN the two HUD pods, inside the cockpit's
+     instrument band — not floating in the playfield. Both `top` and `left`/
+     `width` are set from measured pod geometry in positionBossBar(); the
+     values here are only a pre-measurement fallback for the first frame.
+     Two previous attempts (top: 10%, then a --hud-safe-y rem offset) each
+     looked right at one viewport and overlapped at others, because the HUD's
+     height and width are content-dependent. Measure, never guess.
+     The title was removed deliberately: spawnBoss() already fires a
+     "THE CASCADE CORE" toast, so a permanent label repeats a one-time event
+     forever and was the only element too wide for the gap. */
+  #bossBar {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    z-index: 8;
+  }
+  #bossBar.show { opacity: 1; }
+  .bb-track {
+    height: 16px;
+    background: rgba(255,255,255,0.07);
+    border: 2px solid rgba(255,0,170,0.55);
+    box-shadow: 0 0 18px rgba(255,0,170,0.28), inset 0 0 12px rgba(0,0,0,0.6);
+    overflow: hidden;
+  }
+  .bb-fill {
+    height: 100%;
+    width: 100%;
+    transform-origin: left center;
+    background: linear-gradient(90deg, #7A0050, #FF00AA, #FF77D2);
+    transition: transform 0.25s ease-out;
+  }
+  /* One pip per node — the fight's real progress read is nodes down, not a
+     smooth bar, so both are shown. */
+  .bb-nodes { display: flex; justify-content: center; gap: 7px; margin-top: 0.4rem; }
+  .bb-pip {
+    width: 26px; height: 5px;
+    background: #FF00AA;
+    box-shadow: 0 0 8px rgba(255,0,170,0.8);
+  }
+  .bb-pip.dead { background: #3A2030; box-shadow: none; }
+  @media (max-width: 620px) {
+    /* Width/top still come from positionBossBar(); only the chrome shrinks. */
+    .bb-track { height: 11px; }
+    .bb-pip { width: 18px; height: 4px; }
   }
   /* Generated cockpit frame. The image is mostly transparent and remains a
      non-interactive perimeter layer so the playfield stays fully usable. */
@@ -511,6 +599,10 @@
       <div class="skin-row" id="skinRow">
         <span class="skin-label">SHIP</span>
       </div>
+      <div class="skin-row">
+        <span class="skin-label">MUSIC</span>
+        <button class="track-btn" id="btnTrack">AUTO (BY WAVE)</button>
+      </div>
       <div id="audioHint">CLICK OR PRESS ANY KEY FOR SOUND</div>
       <div id="pauseHint">ESC / START to pause • Gamepad supported</div>
     </div>
@@ -547,6 +639,10 @@
       <div class="wt-bonus" id="wtBonus">BONUS +0</div>
     </div>
     <div id="toastLayer" aria-live="polite"></div>
+    <div id="bossBar" aria-hidden="true">
+      <div class="bb-track"><div class="bb-fill" id="bbFill"></div></div>
+      <div class="bb-nodes" id="bbNodes"></div>
+    </div>
     <div class="hud hidden" id="hud">
       <div class="hud-left">
         <div class="score"><span id="hudScore">0</span><span id="hudMult"></span></div>
@@ -605,24 +701,46 @@ const postfx = createPostFX(display, canvas);
 // graceful fallback if a local browser blocks image loading from file://.
 const SPRITES = {
   player: new Image(),
-  asteroid: new Image(),
+  asteroids: [new Image(), new Image(), new Image(), new Image()],
+  mediumAsteroids: [new Image()],
+  smallAsteroids: [new Image()],
   riftStalker: new Image(),
   riftTendril: new Image(),
+  driftMine: new Image(),
   shieldPickup: new Image(),
   rapidPickup: new Image(),
   spreadPickup: new Image(),
   piercePickup: new Image(),
-  torpedo: new Image()
+  torpedo: new Image(),
+  torpedoPickup: new Image(),
+  multiplierStar: new Image(),
+  bossVoid: new Image(),
+  // Four damage-tier portraits of the whole creature, not a modular ring —
+  // see the swap logic in drawBoss() for why they're picked by overall HP
+  // rather than driving the per-node state directly.
+  cascadeCore: [new Image(), new Image(), new Image(), new Image()]
 };
 SPRITES.player.src = '../assets/ships/player_default.png';
-SPRITES.asteroid.src = '../assets/asteroids/large/asteroid_01.png';
+SPRITES.asteroids.forEach((sprite, i) => {
+  sprite.src = `../assets/asteroids/large/asteroid_0${i + 1}.png`;
+});
+SPRITES.mediumAsteroids[0].src = '../assets/asteroids/medium/asteroid_01.png';
+SPRITES.smallAsteroids[0].src = '../assets/asteroids/small/asteroid_01.png';
 SPRITES.riftStalker.src = '../assets/enemies/rift_stalker_01.png';
 SPRITES.riftTendril.src = '../assets/enemies/rift_tendril/rift_tendril_01.png';
+SPRITES.driftMine.src = '../assets/hazards/drift_mine.png';
 SPRITES.shieldPickup.src = '../assets/powerups/shield_charge.png';
 SPRITES.rapidPickup.src = '../assets/powerups/rapid_fire.png';
 SPRITES.spreadPickup.src = '../assets/powerups/spread_fire.png';
 SPRITES.piercePickup.src = '../assets/powerups/pierce_shot.png';
 SPRITES.torpedo.src = '../assets/weapons/torpedo.png';
+SPRITES.torpedoPickup.src = '../assets/powerups/torpedo_resupply.png';
+SPRITES.multiplierStar.src = '../assets/powerups/multiplier_star.png';
+SPRITES.bossVoid.src = '../assets/backgrounds/boss_void.png';
+// Ordered healthiest -> most damaged so index = escalation phase (0..3).
+['intact', 'damage-1', 'damage-2', 'damage-3'].forEach((n, i) => {
+  SPRITES.cascadeCore[i].src = `../assets/enemies/cascade_core/cascade-core-${n}.png`;
+});
 const spriteSafety = new WeakMap();
 function spriteReady(sprite) {
   if (!sprite.complete || sprite.naturalWidth <= 0) return false;
@@ -960,6 +1078,16 @@ const AudioFX = (() => {
   const MENU_TRACK = 'theme';
   const PLAY_ORDER = ['theme', 'burn', 'thrust'];
   const WAVES_PER_TRACK = 4;   // rotate every 4 waves
+  // Human-readable names for the music picker.
+  const TRACK_NAMES = {
+    theme:  'VOID CASCADE',
+    burn:   'HANGAR FULL BURN',
+    thrust: 'MAXIMUM THRUST',
+  };
+  // null = AUTO (rotate with the waves); otherwise a forced PLAY_ORDER key.
+  // The boss track always overrides this — the fight owns its own music.
+  let forcedTrack = localStorage.getItem('vc_track') || null;
+  if (forcedTrack && !PLAY_ORDER.includes(forcedTrack)) forcedTrack = null;
 
   const tracks = {};
   function makeTrack(key, file, eager) {
@@ -1002,7 +1130,7 @@ const AudioFX = (() => {
   // usable and only demoted to the theme once the browser reports an error.
   function usable(k) { return tracks[k] && tracks[k].ok !== false; }
   function currentPlayTrack() {
-    const k = PLAY_ORDER[playIndex % PLAY_ORDER.length];
+    const k = forcedTrack || PLAY_ORDER[playIndex % PLAY_ORDER.length];
     return usable(k) ? k : 'theme';
   }
   function sceneTracks(s) {
@@ -1013,6 +1141,8 @@ const AudioFX = (() => {
   function applyScene() {
     if (!ac) return;
     const act = sceneTracks(scene);
+    // The background follows whatever is actually audible.
+    setNebulaMood(act[0]);
     const t0 = ac.currentTime;
     // Boss entrance is a hard cut — the cut is the drama. Everything else
     // crossfades gently.
@@ -1231,6 +1361,21 @@ const AudioFX = (() => {
       if (i === playIndex) return;
       playIndex = i;
       if (ac && scene === 'play') applyScene();
+    },
+    // ---- Music picker (menu) ----
+    // Cycles AUTO → each play track → AUTO. Returns the new display label.
+    // The boss track is never selectable: the fight owns its own music.
+    cycleTrack() {
+      const opts = [null, ...PLAY_ORDER.filter(usable)];
+      const next = opts[(opts.indexOf(forcedTrack) + 1) % opts.length];
+      forcedTrack = next;
+      if (next) localStorage.setItem('vc_track', next);
+      else localStorage.removeItem('vc_track');
+      if (ac && scene !== 'boss') applyScene();
+      return this.trackLabel();
+    },
+    trackLabel() {
+      return forcedTrack ? TRACK_NAMES[forcedTrack] : 'AUTO (BY WAVE)';
     },
     // Low-pass duck: pulls the music under a blanket during the wave tally
     // and pause so stingers and the tally ticks cut through.
@@ -1583,10 +1728,55 @@ for (let i=0; i<8; i++) {
 // frame-rate independent.
 let bgScroll = 0;
 
+// ---- Nebula palette, driven by the music ----
+// The background shifts hue when the soundtrack changes, so a new track also
+// looks like a new region of space. Every palette stays in the cold, deep end
+// of the wheel — the void must remain almost black behind it (STYLE_GUIDE).
+const NEBULA_MOODS = {
+  theme:  { hue: 268, spread: 40, sat: 70, light: 40 },   // violet — the default void
+  burn:   { hue: 205, spread: 45, sat: 72, light: 42 },   // cold blue
+  thrust: { hue: 168, spread: 42, sat: 66, light: 38 },   // teal
+  boss:   { hue: 330, spread: 34, sat: 78, light: 44 },   // magenta — the Core's colour
+};
+let nebulaHue = NEBULA_MOODS.theme.hue;
+let nebulaTargetHue = nebulaHue;
+let nebulaSat = NEBULA_MOODS.theme.sat, nebulaTargetSat = nebulaSat;
+let nebulaLight = NEBULA_MOODS.theme.light, nebulaTargetLight = nebulaLight;
+// Called when the music scene/track changes. The blobs keep their own random
+// offsets so the field does not become one flat colour.
+function setNebulaMood(key) {
+  const m = NEBULA_MOODS[key] || NEBULA_MOODS.theme;
+  nebulaTargetHue = m.hue;
+  nebulaTargetSat = m.sat;
+  nebulaTargetLight = m.light;
+  for (let i = 0; i < nebulaBlobs.length; i++) {
+    nebulaBlobs[i].hueOff = (i / nebulaBlobs.length - 0.5) * m.spread;
+  }
+}
+setNebulaMood('theme');
+
 function drawBackground() {
   bgScroll += dt;
   ctx.fillStyle = '#05010A';
   ctx.fillRect(0,0,W,H);
+
+  // The boss keeps a distinct but restrained void behind it. The procedural
+  // nebula and stars still animate above this plate, preserving depth.
+  if (boss && boss.active && spriteReady(SPRITES.bossVoid)) {
+    ctx.save();
+    ctx.globalAlpha = 0.34;
+    ctx.drawImage(SPRITES.bossVoid, 0, 0, W, H);
+    ctx.restore();
+  }
+
+  // Ease toward the target so a track change is a slow wash, not a cut. The
+  // hue takes the short way round the wheel.
+  let dh = nebulaTargetHue - nebulaHue;
+  if (dh > 180) dh -= 360; else if (dh < -180) dh += 360;
+  const k = 1 - Math.pow(0.985, dt);
+  nebulaHue = (nebulaHue + dh * k + 360) % 360;
+  nebulaSat += (nebulaTargetSat - nebulaSat) * k;
+  nebulaLight += (nebulaTargetLight - nebulaLight) * k;
 
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
@@ -1596,9 +1786,10 @@ function drawBackground() {
     if (n.x > W+n.r) n.x = -n.r;
     if (n.y < -n.r) n.y = H+n.r;
     if (n.y > H+n.r) n.y = -n.r;
+    const h = nebulaHue + (n.hueOff || 0);
     const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.r);
-    g.addColorStop(0, `hsla(${n.hue},70%,40%,0.12)`);
-    g.addColorStop(0.5, `hsla(${n.hue},60%,25%,0.05)`);
+    g.addColorStop(0, `hsla(${h},${nebulaSat}%,${nebulaLight}%,0.12)`);
+    g.addColorStop(0.5, `hsla(${h},${nebulaSat - 10}%,${nebulaLight - 15}%,0.05)`);
     g.addColorStop(1, 'transparent');
     ctx.fillStyle = g;
     ctx.beginPath();
@@ -1607,26 +1798,9 @@ function drawBackground() {
   }
   ctx.restore();
 
-  // Faint scrolling grid. Without a fixed reference the playfield reads as a
-  // flat void and the ship looks like it is sliding on glass; the grid gives
-  // motion something to register against. Kept under the bloom threshold so it
-  // never glows and never competes with gameplay elements.
-  const cell = 90;
-  const ox = (bgScroll * 0.18) % cell;
-  const oy = (bgScroll * 0.09) % cell;
-  ctx.save();
-  ctx.strokeStyle = '#3A7BFF';
-  ctx.globalAlpha = 0.055;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (let x = -ox; x < W + cell; x += cell) {
-    ctx.moveTo(x, 0); ctx.lineTo(x, H);
-  }
-  for (let y = -oy; y < H + cell; y += cell) {
-    ctx.moveTo(0, y); ctx.lineTo(W, y);
-  }
-  ctx.stroke();
-  ctx.restore();
+  // The scrolling reference grid was removed by explicit decision (2026-08-07):
+  // it read as a floor under the void and fought the deep-space look. The
+  // parallax starfield below is the motion reference. Do not reinstate it.
 
   for (const s of stars) {
     const px = (s.x * W + bgScroll * 0.02 * s.z) % W;
@@ -1973,7 +2147,8 @@ function spawnAsteroid(x, y, size, speedMult=1, crystal=false) {
   // Crystals are glass cannons: never armoured, they die to one hit — the
   // threat is what they shatter into, not how long they take to kill.
   const hp = crystal ? 1 : armorFor(size, wave);
-  asteroids.push({ x: x ?? Math.random()*W, y: y ?? Math.random()*H, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed, size, radius: size === 3 ? 42 : size === 2 ? 24 : 12, rot: Math.random()*Math.PI*2, rotSpeed: (Math.random()-0.5)*0.04, verts: crystal ? generateCrystalVerts() : generateAsteroidVerts(size), craters: generateCraters(size), hp, maxHp: hp, hitFlash: 0, cracks: hp > 1 ? generateCracks(2 + size) : null, crystal });
+  const pool = size === 3 ? SPRITES.asteroids : size === 2 ? SPRITES.mediumAsteroids : SPRITES.smallAsteroids;
+  asteroids.push({ x: x ?? Math.random()*W, y: y ?? Math.random()*H, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed, size, radius: size === 3 ? 42 : size === 2 ? 24 : 12, rot: Math.random()*Math.PI*2, rotSpeed: (Math.random()-0.5)*0.04, verts: crystal ? generateCrystalVerts() : generateAsteroidVerts(size), craters: generateCraters(size), hp, maxHp: hp, hitFlash: 0, cracks: hp > 1 ? generateCracks(2 + size) : null, sprite: crystal ? null : pool[Math.floor(Math.random() * pool.length)], crystal });
 }
 // Crystals are cut, not weathered: fewer vertices with harder radius swings
 // give a shard silhouette no tumbling rock could have.
@@ -2073,11 +2248,11 @@ function drawAsteroids() {
       continue;
     }
 
-    if (spriteReady(SPRITES.asteroid)) {
-      // One master remains legible across the three gameplay sizes; its matte
+    if (spriteReady(a.sprite)) {
+      // A random master remains legible across the three gameplay sizes; its matte
       // pixels stay beneath the bloom threshold unlike the interactive neon.
       const size = a.radius * 2.45;
-      ctx.drawImage(SPRITES.asteroid, -size / 2, -size / 2, size, size);
+      ctx.drawImage(a.sprite, -size / 2, -size / 2, size, size);
       drawArmor(a);
       ctx.restore();
       continue;
@@ -2235,6 +2410,22 @@ function vaporizeAsteroid(a, idx) {
 }
 
 const enemies = [];
+// Boss waves are 10, 20, 30…; the next regular wave introduces the upgraded
+// enemy tier. Counts stay bounded — Tier 2 means sharper familiar threats,
+// never a new swarm on top of the existing roster.
+function enemyTierForWave(w) {
+  return w >= 21 ? 3 : w >= 11 ? 2 : 1;
+}
+const RIFT_STALKER_TIER = {
+  1: { hp: 2, turn: 0.022, accel: 0.050, refire: 110 },
+  2: { hp: 3, turn: 0.025, accel: 0.055, refire: 96 },
+  3: { hp: 4, turn: 0.028, accel: 0.060, refire: 84 }
+};
+const RIFT_TENDRIL_TIER = {
+  1: { hp: 5, ramSpeed: 5.35, windup: 46, recovery: 58 },
+  2: { hp: 6, ramSpeed: 5.62, windup: 43, recovery: 52 },
+  3: { hp: 7, ramSpeed: 5.90, windup: 40, recovery: 46 }
+};
 function spawnEnemy() {
   const side = Math.floor(Math.random()*4);
   let x,y;
@@ -2244,7 +2435,10 @@ function spawnEnemy() {
   else { x=Math.random()*W; y=H+30; }
   // Radius tracks the sprite draw size (same 1:3 ratio the old 16/48 had) now
   // that the Stalker renders at the player ship's visual size.
-  enemies.push({ x, y, vx:0, vy:0, angle: 0, radius: 22, fireCooldown: 120 + Math.random()*60, hp: 2, seed: Math.random()*Math.PI*2 });
+  const tier = enemyTierForWave(wave);
+  const tuning = RIFT_STALKER_TIER[tier];
+  enemies.push({ x, y, vx:0, vy:0, angle: 0, radius: 22, tier,
+    fireCooldown: tuning.refire + Math.random()*60, hp: tuning.hp, seed: Math.random()*Math.PI*2 });
 }
 function spawnRiftTendril() {
   const side = Math.floor(Math.random()*4);
@@ -2253,8 +2447,10 @@ function spawnRiftTendril() {
   else if (side===1) { x=W+90; y=Math.random()*H; }
   else if (side===2) { x=Math.random()*W; y=-90; }
   else { x=Math.random()*W; y=H+90; }
-  // The Tendril is a single heavy setpiece: its health only rises every five
-  // waves, while its ram gets fractionally quicker. It never fires bullets.
+  const tier = enemyTierForWave(wave);
+  const tuning = RIFT_TENDRIL_TIER[tier];
+  // The Tendril is a single heavy setpiece. Explicit post-boss tiers keep its
+  // changes legible and predictable; it never fires bullets.
   // It enters slowly and dark rather than arriving mid-hunt: 'enter' creeps in
   // from off-screen with the core cold and the hull fading up, and cannot ram
   // until it has fully arrived. The entrance is the introduction — a heavy
@@ -2265,10 +2461,10 @@ function spawnRiftTendril() {
     type: 'tendril', x, y,
     vx: Math.cos(entryAngle) * 0.85, vy: Math.sin(entryAngle) * 0.85,
     angle: entryAngle,
-    radius: 34, hp: 5 + Math.floor((wave - 5) / 5), seed: Math.random()*Math.PI*2,
+    radius: 34, hp: tuning.hp, tier, seed: Math.random()*Math.PI*2,
     state: 'enter', stateTimer: 150, chargeCooldown: 170 + Math.random()*55,
     entryFade: 0,
-    ramSpeed: 5.35 + Math.min(0.65, Math.floor((wave - 5) / 5) * 0.2)
+    ramSpeed: tuning.ramSpeed
   });
   AudioFX.tendrilArrive();
 }
@@ -2300,7 +2496,7 @@ function updateRiftTendril(e, desired, da, dist) {
     // Stay at a dodgeable range and give the player a long, bright wind-up.
     if (e.chargeCooldown <= 0 && dist > 150 && dist < 510) {
       e.state = 'windup';
-      e.stateTimer = kidMode ? 58 : 46;
+      e.stateTimer = kidMode ? 58 : RIFT_TENDRIL_TIER[e.tier].windup;
       e.vx *= 0.35; e.vy *= 0.35;
     }
     return;
@@ -2324,7 +2520,7 @@ function updateRiftTendril(e, desired, da, dist) {
     if (Math.random() < 0.72) spawnTrail(e.x, e.y, e.angle, '#FF00AA');
     if (e.stateTimer <= 0 || e.x < -140 || e.x > W+140 || e.y < -140 || e.y > H+140) {
       e.state = 'recover';
-      e.stateTimer = kidMode ? 76 : 58;
+      e.stateTimer = kidMode ? 76 : RIFT_TENDRIL_TIER[e.tier].recovery;
     }
     return;
   }
@@ -2351,8 +2547,9 @@ function updateEnemies() {
     }
     // Deliberately sluggish hunters: slow turn, gentle acceleration, long
     // refire and a shorter attack range, so they pressure rather than swarm.
-    e.angle += da * 0.022 * dt;
-    const accel = 0.05 * (kidMode ? 0.7 : 1);
+    const tuning = RIFT_STALKER_TIER[e.tier || 1];
+    e.angle += da * tuning.turn * dt;
+    const accel = tuning.accel * (kidMode ? 0.7 : 1);
     e.vx += Math.cos(e.angle) * accel * dt;
     e.vy += Math.sin(e.angle) * accel * dt;
     const eDrag = Math.pow(0.97, dt);
@@ -2360,7 +2557,7 @@ function updateEnemies() {
     e.x += e.vx * dt; e.y += e.vy * dt;
     e.fireCooldown -= dt;
     if (e.fireCooldown <= 0 && dist < 360) {
-      e.fireCooldown = kidMode ? 170 : 110;
+      e.fireCooldown = kidMode ? 170 : tuning.refire;
       bullets.push({ x: e.x + Math.cos(e.angle)*14, y: e.y + Math.sin(e.angle)*14, vx: Math.cos(e.angle)*5.2, vy: Math.sin(e.angle)*5.2, life: 90, fromPlayer: false });
     }
     // spawnTrail already offsets backwards along the given angle; the old
@@ -2400,7 +2597,8 @@ function drawEnemies() {
       }
       // The visible swell is the attack contract: no magenta flare, no ram.
       const coreX = width * 0.075;
-      const coreRadius = 10 + corePulse * (windingUp ? 15 : charging ? 12 : 5);
+      const tierGlow = 1 + ((e.tier || 1) - 1) * 0.12;
+      const coreRadius = (10 + corePulse * (windingUp ? 15 : charging ? 12 : 5)) * tierGlow;
       const core = ctx.createRadialGradient(coreX, 0, 1, coreX, 0, coreRadius);
       core.addColorStop(0, '#FFFFFF');
       core.addColorStop(0.22, '#FF77D2');
@@ -2414,6 +2612,14 @@ function drawEnemies() {
         ctx.strokeStyle = 'rgba(255,0,170,0.78)';
         ctx.lineWidth = 2.2;
         ctx.beginPath(); ctx.moveTo(width*0.34, -height*0.18); ctx.lineTo(width*0.50, 0); ctx.lineTo(width*0.34, height*0.18); ctx.stroke();
+      }
+      if ((e.tier || 1) > 1) {
+        // Tier armour reads as a few hot seams, not a whole new silhouette.
+        ctx.strokeStyle = `rgba(255,0,170,${0.25 + e.tier * 0.08})`;
+        ctx.lineWidth = 1.1;
+        for (const y of [-height * 0.19, height * 0.19]) {
+          ctx.beginPath(); ctx.moveTo(width * 0.18, y); ctx.lineTo(width * 0.34, y * 0.56); ctx.stroke();
+        }
       }
       ctx.restore();
       continue;
@@ -2429,6 +2635,16 @@ function drawEnemies() {
       const size = 58 * SHIP_SCALE;
       ctx.globalAlpha = 0.9 + pulse * 0.1;
       ctx.drawImage(SPRITES.riftStalker, -size / 2, -size / 2, size, size);
+      if ((e.tier || 1) > 1) {
+        const tierGlow = 4.5 + (e.tier - 1) * 2.2 + pulse * 1.5;
+        const core = ctx.createRadialGradient(0, 0, 0.5, 0, 0, tierGlow);
+        core.addColorStop(0, 'rgba(255,255,255,0.80)');
+        core.addColorStop(0.35, 'rgba(255,0,170,0.48)');
+        core.addColorStop(1, 'rgba(255,0,170,0)');
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = core;
+        ctx.beginPath(); ctx.arc(0, 0, tierGlow, 0, Math.PI*2); ctx.fill();
+      }
       ctx.restore();
       continue;
     }
@@ -2598,6 +2814,17 @@ function updateWells() {
     for (const t of torpedoShots) wellPullOn(t, 0.06, w);
     for (const a of asteroids) wellPullOn(a, 0.03, w);
     for (const p of powerups) wellPullOn(p, 0.05, w);
+    // Crossing the event horizon is a hit, not just a pull — the well needs
+    // teeth or getting dragged into the core is a free ride, not a threat.
+    if (player.invuln <= 0 && Math.hypot(w.x-player.x, w.y-player.y) < 13 + player.radius) {
+      if ((shieldActive() || kidMode) && player.shield > 5) {
+        player.shield = Math.max(0, player.shield - 35);
+        spawnParticles(player.x, player.y, 15, '#3A7BFF', 4, 25, 3);
+        AudioFX.shieldHit();
+      } else {
+        playerHit();
+      }
+    }
     // A thin trickle of infalling sparks sells the pull direction. Goes
     // through emit() so the sparks respect the pool and the particle cap.
     if (Math.random() < 0.3 && particles.length < PARTICLE_CAP) {
@@ -2622,23 +2849,28 @@ function drawMines() {
     const pulse = armed
       ? (Math.floor(frame / 3) % 2 ? 1 : 0.25)              // hard strobe
       : 0.45 + 0.25 * Math.sin(frame * 0.06 + m.seed);      // idle breathing
-    const body = ctx.createRadialGradient(-3, -3, 1, 0, 0, m.radius);
-    body.addColorStop(0, '#3A3A46');
-    body.addColorStop(0.6, '#20202A');
-    body.addColorStop(1, '#101018');
-    ctx.beginPath();
-    ctx.arc(0, 0, m.radius, 0, Math.PI*2);
-    ctx.fillStyle = body;
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(12,12,16,0.9)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    for (let s = 0; s < 6; s++) {
-      const a = (s / 6) * Math.PI * 2 + m.seed;
+    if (spriteReady(SPRITES.driftMine)) {
+      const size = m.radius * 3.2;
+      ctx.drawImage(SPRITES.driftMine, -size / 2, -size / 2, size, size);
+    } else {
+      const body = ctx.createRadialGradient(-3, -3, 1, 0, 0, m.radius);
+      body.addColorStop(0, '#3A3A46');
+      body.addColorStop(0.6, '#20202A');
+      body.addColorStop(1, '#101018');
       ctx.beginPath();
-      ctx.arc(Math.cos(a) * m.radius, Math.sin(a) * m.radius, 1.6, 0, Math.PI*2);
-      ctx.fillStyle = `rgba(255,0,170,${0.35 + pulse * 0.65})`;
+      ctx.arc(0, 0, m.radius, 0, Math.PI*2);
+      ctx.fillStyle = body;
       ctx.fill();
+      ctx.strokeStyle = 'rgba(12,12,16,0.9)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      for (let s = 0; s < 6; s++) {
+        const a = (s / 6) * Math.PI * 2 + m.seed;
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * m.radius, Math.sin(a) * m.radius, 1.6, 0, Math.PI*2);
+        ctx.fillStyle = `rgba(255,0,170,${0.35 + pulse * 0.65})`;
+        ctx.fill();
+      }
     }
     ctx.beginPath();
     ctx.arc(0, 0, 3.2, 0, Math.PI*2);
@@ -2662,32 +2894,41 @@ function drawWells() {
   for (const w of wells) {
     ctx.save();
     ctx.translate(w.x, w.y);
-    const halo = ctx.createRadialGradient(0, 0, 4, 0, 0, WELL_RANGE * 0.55);
-    halo.addColorStop(0, 'rgba(0,0,0,0.95)');
-    halo.addColorStop(0.25, 'rgba(26,10,46,0.55)');
+    const halo = ctx.createRadialGradient(0, 0, 12, 0, 0, WELL_RANGE * 0.48);
+    halo.addColorStop(0, 'rgba(0,0,0,0.92)');
+    halo.addColorStop(0.28, 'rgba(12,4,20,0.18)');
+    halo.addColorStop(0.7, 'rgba(26,10,46,0.10)');
     halo.addColorStop(1, 'rgba(26,10,46,0)');
     ctx.beginPath();
-    ctx.arc(0, 0, WELL_RANGE * 0.55, 0, Math.PI*2);
+    ctx.arc(0, 0, WELL_RANGE * 0.48, 0, Math.PI*2);
     ctx.fillStyle = halo;
     ctx.fill();
+
+    // A flattened disc reads as an accretion plane instead of a target ring.
+    ctx.save();
+    ctx.rotate(w.rot * 1.25);
+    ctx.scale(1, 0.38);
     for (let ring = 0; ring < 3; ring++) {
-      const rr = 22 + ring * 16;
-      const start = w.rot * (1 + ring * 0.35) + ring * 2.1;
+      const rr = 25 + ring * 14;
+      const start = ring * 2.15 + (ring % 2 ? Math.PI : 0);
       ctx.beginPath();
-      ctx.arc(0, 0, rr, start, start + Math.PI * (1.1 - ring * 0.18));
-      ctx.strokeStyle = `rgba(58,123,255,${0.34 - ring * 0.08})`;
-      ctx.lineWidth = 2 - ring * 0.5;
+      ctx.arc(0, 0, rr, start, start + Math.PI * (0.62 - ring * 0.08));
+      ctx.strokeStyle = ring === 0
+        ? 'rgba(255,0,170,0.38)'
+        : `rgba(88,70,160,${0.22 - ring * 0.05})`;
+      ctx.lineWidth = 2.2 - ring * 0.45;
       ctx.stroke();
     }
+    ctx.restore();
     // Event-horizon rim: the one thin bright line that makes the black core
     // read as an object instead of a hole in the render.
     ctx.beginPath();
-    ctx.arc(0, 0, 13, 0, Math.PI*2);
-    ctx.strokeStyle = 'rgba(122,160,255,0.8)';
-    ctx.lineWidth = 1.5;
+    ctx.arc(0, 0, 14, -0.42, 1.75);
+    ctx.strokeStyle = 'rgba(255,0,170,0.5)';
+    ctx.lineWidth = 1.2;
     ctx.stroke();
     ctx.beginPath();
-    ctx.arc(0, 0, 12, 0, Math.PI*2);
+    ctx.arc(0, 0, 13, 0, Math.PI*2);
     ctx.fillStyle = '#000000';
     ctx.fill();
     ctx.restore();
@@ -2702,24 +2943,74 @@ function drawWells() {
 // 1 starts charging across the field and re-entering through the wrap — the
 // one behaviour that makes it an Asteroids boss and not a shmup boss.
 let boss = null;
-const BOSS_RADIUS = 86;   // outer armour radius
-const NODE_DIST = 62;     // node orbit radius on the ring face
-const NODE_R = 13;
+const BOSS_RADIUS = 86;   // outer armour radius — procedural fallback only, see below
+// Node reachability is handled by check ORDER in checkCollisions (node-hit is
+// tested before the armour-absorb radius, unconditionally, for any bullet
+// inside NODE_DIST+NODE_R+4) rather than by keeping NODE_DIST outside
+// BOSS_RADIUS. That ordering is what actually matters — see the invincible-
+// boss writeup in the session log from 2026-08-07 for how getting this wrong
+// made the boss unkillable. BOSS_RADIUS itself is now ONLY the procedural
+// fallback's armour-ring radius; it plays no role in whether nodes can be hit.
+//
+// NODE_DIST=64 and NODE_R=26 are measured, not designed: they are the actual
+// pixel position and glow radius of the four diamond gems baked into the
+// cascade_core art (measured 2026-08-07 via getImageData sampling — the
+// diamonds sit at exactly 0/90/180/270°, radius ~64px, each with a ~26px
+// glow footprint along its long axis). NODE_R must stay >= that glow radius
+// or a "dead" node's dark cover leaves a ring of the art's bright diamond
+// showing around its edge. If the art is ever replaced, re-measure both.
+const NODE_DIST = 64;
+const NODE_R = 26;
+// Purely cosmetic (2026-08-07): the rendered glow/crater is 30% smaller than
+// NODE_R by request. NODE_R itself stays untouched — it still drives the
+// opaque cover circle that hides the art on death (needs the full ~26px to
+// avoid the leak this was measured to fix) and the hit-test radius, so
+// shrinking the visible pip does not shrink the hittable target or reopen
+// the cover-leak bug.
+const NODE_VIS_R = NODE_R * 0.7;
+const BOSS_TENDRIL_COUNT = 20;
 function bossTier() { return Math.max(1, Math.floor(wave / 10)); }
 
 function spawnBoss() {
   const tier = bossTier();
+  const nodeHp = 2 + tier;
   boss = {
     x: W / 2, y: -140, vx: 0, vy: 0.9,
     rot: 0, rotSpeed: 0.006,
     active: false,             // invulnerable + passive until fully on-field
-    nodes: [0, 1, 2, 3].map(i => ({ i, hp: 2 + tier, alive: true })),
+    nodes: [0, 1, 2, 3].map(i => ({ i, hp: nodeHp, alive: true })),
+    maxHp: nodeHp * 4,
+    addPhase: -1,              // which escalation step has been fired
     spitCd: 240, ringCd: 200, hitFlash: 0,
     chargeCd: 300, telegraph: 0, charging: 0, aimAngle: 0,
     seed: Math.random() * Math.PI * 2
   };
   addToast('THE CASCADE CORE', '#FF00AA');
   AudioFX.bossAlarm();
+}
+function bossHp() {
+  return boss ? boss.nodes.reduce((s, n) => s + Math.max(0, n.hp), 0) : 0;
+}
+// Escalation: the Core calls in support as it loses health, so the fight gets
+// harder exactly as the player gets closer to winning.
+//   phase 0 (full → 2/3 hp): 3 Rift Stalkers
+//   phase 1 (2/3 → 1/3 hp):  2 Rift Tendrils
+//   phase 2 (final third):   2 more Stalkers AND 2 more Tendrils
+const BOSS_ADDS = [
+  { stalkers: 3, tendrils: 0, toast: 'RIFT STALKERS INBOUND' },
+  { stalkers: 0, tendrils: 2, toast: 'RIFT TENDRILS INBOUND' },
+  { stalkers: 2, tendrils: 2, toast: 'THE VOID ANSWERS' },
+];
+function bossEscalate(phase) {
+  const a = BOSS_ADDS[phase];
+  if (!a) return;
+  boss.addPhase = phase;
+  addToast(a.toast, '#FF00AA');
+  AudioFX.bossAlarm();
+  // Staggered so the field never gains a whole squadron in one frame.
+  let delay = 300;
+  for (let i = 0; i < a.stalkers; i++) { later(spawnEnemy, delay); delay += 700; }
+  for (let i = 0; i < a.tendrils; i++) { later(spawnRiftTendril, delay); delay += 1100; }
 }
 function bossNodePos(n) {
   const a = boss.rot + n.i * Math.PI / 2;
@@ -2795,9 +3086,17 @@ function updateBoss() {
   // Entrance: drift down into the field, then wake.
   if (!boss.active) {
     boss.y += boss.vy * dt;
-    if (boss.y > H * 0.3) { boss.active = true; boss.vx = 0.4; boss.vy = 0.15; }
+    if (boss.y > H * 0.3) {
+      boss.active = true; boss.vx = 0.4; boss.vy = 0.15;
+      bossEscalate(0);   // first escort arrives with the boss waking up
+    }
     return;
   }
+
+  // Escalation thresholds on total remaining node health.
+  const hpFrac = bossHp() / boss.maxHp;
+  const wantPhase = hpFrac > 2 / 3 ? 0 : hpFrac > 1 / 3 ? 1 : 2;
+  if (wantPhase > boss.addPhase) bossEscalate(wantPhase);
 
   const alive = bossAliveNodes().length;
   const phase = alive >= 3 ? 1 : alive === 2 ? 2 : 3;
@@ -2867,6 +3166,110 @@ function updateBoss() {
   }
 }
 
+// Boss bar lives in the DOM (see #bossBar) so bloom cannot smear it. Only the
+// fill transform and the pip classes change per frame, and both are cached.
+const bossBarEl = document.getElementById('bossBar');
+const bbFill = document.getElementById('bbFill');
+const bbNodes = document.getElementById('bbNodes');
+let shownBossPips = null;
+// The bar's position AND width are MEASURED against the real HUD pods, never
+// guessed as CSS percentages. Three earlier attempts each looked correct at
+// one viewport and broke at another: `top: 10%` and a `--hud-safe-y` rem
+// offset both overlapped the wave/torpedo/shield row (by 14-23px, then 17px
+// once weapon chips and the overcharge underline stacked to their tallest),
+// and a fixed `width` pushed the bar under the pods on narrow windows. The
+// HUD's height and width are content-dependent — viewport size, wrapped
+// torpedo/life icons, 0-3 weapon chips — so only measurement is reliable.
+// Same failure shape as the earlier menu-hint overlap.
+const hudLeftEl = document.getElementById('hud').querySelector('.hud-left');
+const hudRightEl = document.getElementById('hud').querySelector('.hud-right');
+const BOSS_BAR_GUTTER = 18;   // clearance kept from each pod edge
+function positionBossBar() {
+  const uiBox = document.getElementById('ui').getBoundingClientRect();
+  const L = hudLeftEl.getBoundingClientRect();
+  const R = hudRightEl.getBoundingClientRect();
+  // Vertical: sit inside the pod band, vertically centred against the pods so
+  // it reads as one of the instruments rather than hanging below them.
+  const bandTop = Math.min(L.top, R.top);
+  const bandBottom = Math.max(L.bottom, R.bottom);
+  const h = bossBarEl.offsetHeight || 40;
+  bossBarEl.style.top =
+    Math.round(bandTop - uiBox.top + Math.max(0, (bandBottom - bandTop - h) / 2)) + 'px';
+  // Horizontal: fill the measured gap between the pods, minus a gutter. If the
+  // pods ever leave too little room (very narrow window), fall back to a
+  // centred proportion of the viewport rather than collapsing to nothing.
+  const gap = R.left - L.right - BOSS_BAR_GUTTER * 2;
+  bossBarEl.style.width = Math.round(gap >= 120 ? gap : uiBox.width * 0.5) + 'px';
+}
+function renderBossBar() {
+  const show = !!boss && boss.active;
+  bossBarEl.classList.toggle('show', show);
+  if (!show) { shownBossPips = null; return; }
+  positionBossBar();
+  bbFill.style.transform = 'scaleX(' + (bossHp() / boss.maxHp) + ')';
+  const pips = boss.nodes.map(n => n.alive ? '1' : '0').join('');
+  if (pips !== shownBossPips) {
+    shownBossPips = pips;
+    bbNodes.innerHTML = boss.nodes
+      .map(n => '<div class="bb-pip' + (n.alive ? '' : ' dead') + '"></div>').join('');
+  }
+}
+
+// The Core's limbs are anchors, not attacks: their motion is deliberately
+// slow and phase-offset. A destroyed node makes its local group go slack so
+// progress changes the silhouette without changing collision or damage rules.
+function drawBossTendrils() {
+  const time = frame * 0.028 + boss.seed;
+  const perNode = BOSS_TENDRIL_COUNT / boss.nodes.length;
+  for (let i = 0; i < BOSS_TENDRIL_COUNT; i++) {
+    const node = boss.nodes[Math.floor(i / perNode)];
+    const alive = node.alive;
+    const a = i * Math.PI * 2 / BOSS_TENDRIL_COUNT;
+    const phase = time + i * 0.73;
+    const sway = Math.sin(phase) * (alive ? 0.105 : 0.026)
+      + Math.sin(phase * 0.47) * (alive ? 0.035 : 0.012);
+    const tipRadius = alive ? 142 : 112;
+    const tipAngle = a + sway * (alive ? 1.25 : 0.35);
+    const points = [
+      [Math.cos(a) * 76, Math.sin(a) * 76],
+      [Math.cos(a + sway * 0.28) * 105, Math.sin(a + sway * 0.28) * 105],
+      [Math.cos(a + sway * 0.75) * 126, Math.sin(a + sway * 0.75) * 126],
+      [Math.cos(tipAngle) * tipRadius, Math.sin(tipAngle) * tipRadius]
+    ];
+    const path = () => {
+      ctx.beginPath();
+      ctx.moveTo(...points[0]);
+      ctx.bezierCurveTo(...points[1], ...points[2], ...points[3]);
+    };
+
+    // Matte chitin body: deliberately below the bloom threshold.
+    ctx.lineCap = 'round';
+    path();
+    ctx.strokeStyle = alive ? '#15151D' : '#101016';
+    ctx.lineWidth = alive ? 9 : 7;
+    ctx.stroke();
+    path();
+    ctx.strokeStyle = alive ? '#2A2A3A' : '#20202A';
+    ctx.lineWidth = alive ? 5.5 : 4;
+    ctx.stroke();
+
+    // Only live limbs carry energy. The narrow vein and tiny tip are the
+    // magenta emissive read; destroyed limbs retain only inert armour.
+    if (!alive) continue;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    path();
+    ctx.strokeStyle = 'rgba(255,0,170,0.58)';
+    ctx.lineWidth = 1.25;
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,0,170,0.84)';
+    ctx.beginPath();
+    ctx.arc(...points[3], 1.7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
 function drawBoss() {
   if (!boss) return;
   ctx.save();
@@ -2888,44 +3291,72 @@ function drawBoss() {
 
   ctx.rotate(boss.rot);
 
-  // Core rift: dark purple depths with a breathing magenta heart.
-  const corePulse = 0.6 + 0.4 * Math.sin(frame * 0.07 + boss.seed);
-  const core = ctx.createRadialGradient(0, 0, 2, 0, 0, 40);
-  core.addColorStop(0, `rgba(255,0,170,${0.5 + corePulse * 0.4})`);
-  core.addColorStop(0.4, 'rgba(120,0,90,0.5)');
-  core.addColorStop(1, 'rgba(26,10,46,0.9)');
-  ctx.beginPath();
-  ctx.arc(0, 0, 42, 0, Math.PI * 2);
-  ctx.fillStyle = core;
-  ctx.fill();
+  // Hybrid render (added 2026-08-07): `cascadeCore` is four whole-creature
+  // damage-tier PORTRAITS (Codex art), not a modular ring — it cannot show an
+  // arbitrary combination of dead/alive nodes on its own, only an overall
+  // damage stage. So the portrait stands in for the body + baked-in tendrils,
+  // picked by total remaining HP, while the functional per-node pips below
+  // (alive glow / dead crater) still render on top at their exact rotated
+  // positions — that per-node readability is the part that MUST stay correct
+  // regardless of which body render path is used.
+  const hpFrac = boss.maxHp ? bossHp() / boss.maxHp : 1;
+  const artTier = hpFrac > 0.75 ? 0 : hpFrac > 0.5 ? 1 : hpFrac > 0.25 ? 2 : 3;
+  const art = SPRITES.cascadeCore[artTier];
+  if (spriteReady(art)) {
+    // Sized so the portrait's own baked tendril tips land close to where the
+    // procedural tendrils (drawBossTendrils, alive tip radius 142) would have
+    // reached, and its body disc lands close to BOSS_RADIUS — an estimate
+    // from the source art's proportions, not a measured mapping.
+    const size = 300;
+    if (boss.hitFlash > 0) ctx.filter = 'brightness(1.6) saturate(1.3)';
+    ctx.drawImage(art, -size / 2, -size / 2, size, size);
+    ctx.filter = 'none';
+  } else {
+    // Fully procedural fallback — unchanged, used until all four tiers load.
+    drawBossTendrils();
 
-  // Armoured annulus: matte gunmetal like the asteroids — armour must read
-  // as "not damageable" the same way rock reads as solid.
-  ctx.beginPath();
-  ctx.arc(0, 0, BOSS_RADIUS, 0, Math.PI * 2);
-  ctx.arc(0, 0, 48, 0, Math.PI * 2, true);
-  const plate = ctx.createRadialGradient(0, 0, 48, 0, 0, BOSS_RADIUS);
-  plate.addColorStop(0, '#20202A');
-  plate.addColorStop(0.5, '#2E2E3A');
-  plate.addColorStop(1, '#16161E');
-  ctx.fillStyle = plate;
-  ctx.fill();
-  ctx.strokeStyle = boss.hitFlash > 0 ? 'rgba(255,255,255,0.85)' : 'rgba(12,12,16,0.9)';
-  ctx.lineWidth = 2.5;
-  ctx.stroke();
-  // Plate seams
-  ctx.strokeStyle = 'rgba(10,10,14,0.8)';
-  ctx.lineWidth = 2;
-  for (let k = 0; k < 8; k++) {
-    const a = k * Math.PI / 4 + Math.PI / 8;
+    // Core rift: dark purple depths with a breathing magenta heart.
+    const corePulse = 0.6 + 0.4 * Math.sin(frame * 0.07 + boss.seed);
+    const core = ctx.createRadialGradient(0, 0, 2, 0, 0, 40);
+    core.addColorStop(0, `rgba(255,0,170,${0.5 + corePulse * 0.4})`);
+    core.addColorStop(0.4, 'rgba(120,0,90,0.5)');
+    core.addColorStop(1, 'rgba(26,10,46,0.9)');
     ctx.beginPath();
-    ctx.moveTo(Math.cos(a) * 48, Math.sin(a) * 48);
-    ctx.lineTo(Math.cos(a) * BOSS_RADIUS, Math.sin(a) * BOSS_RADIUS);
+    ctx.arc(0, 0, 42, 0, Math.PI * 2);
+    ctx.fillStyle = core;
+    ctx.fill();
+
+    // Armoured annulus: matte gunmetal like the asteroids — armour must read
+    // as "not damageable" the same way rock reads as solid.
+    ctx.beginPath();
+    ctx.arc(0, 0, BOSS_RADIUS, 0, Math.PI * 2);
+    ctx.arc(0, 0, 48, 0, Math.PI * 2, true);
+    const plate = ctx.createRadialGradient(0, 0, 48, 0, 0, BOSS_RADIUS);
+    plate.addColorStop(0, '#20202A');
+    plate.addColorStop(0.5, '#2E2E3A');
+    plate.addColorStop(1, '#16161E');
+    ctx.fillStyle = plate;
+    ctx.fill();
+    ctx.strokeStyle = boss.hitFlash > 0 ? 'rgba(255,255,255,0.85)' : 'rgba(12,12,16,0.9)';
+    ctx.lineWidth = 2.5;
     ctx.stroke();
+    // Plate seams
+    ctx.strokeStyle = 'rgba(10,10,14,0.8)';
+    ctx.lineWidth = 2;
+    for (let k = 0; k < 8; k++) {
+      const a = k * Math.PI / 4 + Math.PI / 8;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * 48, Math.sin(a) * 48);
+      ctx.lineTo(Math.cos(a) * BOSS_RADIUS, Math.sin(a) * BOSS_RADIUS);
+      ctx.stroke();
+    }
   }
 
   // Nodes: live ones are magenta orbs in armoured sockets; dead ones are
-  // scorched craters — progress you can read at a glance.
+  // scorched craters — progress you can read at a glance. The opaque cover
+  // circle below stays sized off NODE_R (not NODE_VIS_R) — it is what fully
+  // hides the art's baked diamond when a node dies, and shrinking it would
+  // reopen that leak even though the glow drawn on top is now smaller.
   for (const n of boss.nodes) {
     const a = n.i * Math.PI / 2;
     const nx = Math.cos(a) * NODE_DIST, ny = Math.sin(a) * NODE_DIST;
@@ -2935,17 +3366,17 @@ function drawBoss() {
     ctx.fill();
     if (n.alive) {
       const p = 0.6 + 0.4 * Math.sin(frame * 0.13 + n.i * 1.7);
-      const orb = ctx.createRadialGradient(nx, ny, 1, nx, ny, NODE_R);
+      const orb = ctx.createRadialGradient(nx, ny, 1, nx, ny, NODE_VIS_R);
       orb.addColorStop(0, '#FFE0F4');
       orb.addColorStop(0.35, '#FF00AA');
       orb.addColorStop(1, 'rgba(255,0,170,0.15)');
       ctx.beginPath();
-      ctx.arc(nx, ny, NODE_R * (0.85 + p * 0.15), 0, Math.PI * 2);
+      ctx.arc(nx, ny, NODE_VIS_R * (0.85 + p * 0.15), 0, Math.PI * 2);
       ctx.fillStyle = orb;
       ctx.fill();
     } else {
       ctx.beginPath();
-      ctx.arc(nx, ny, NODE_R * 0.7, 0, Math.PI * 2);
+      ctx.arc(nx, ny, NODE_VIS_R * 0.7, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(20,10,14,0.9)';
       ctx.fill();
       ctx.strokeStyle = 'rgba(255,94,0,0.35)';
@@ -3015,6 +3446,11 @@ function drawPowerups() {
     // Score multiplier: spinning gold four-point star with an × at the core.
     if (p.type === 'mult') {
       ctx.rotate(p.rot);
+      if (spriteReady(SPRITES.multiplierStar)) {
+        ctx.drawImage(SPRITES.multiplierStar, -13, -13, 26, 26);
+        ctx.restore();
+        continue;
+      }
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.fillStyle = '#FFD23F';
@@ -3042,7 +3478,7 @@ function drawPowerups() {
       : p.type === 'rapid' ? SPRITES.rapidPickup
       : p.type === 'spread' ? SPRITES.spreadPickup
       : p.type === 'pierce' ? SPRITES.piercePickup
-      : p.type === 'torpedo' ? SPRITES.torpedo
+      : p.type === 'torpedo' ? SPRITES.torpedoPickup
       : null;
     if (sprite && spriteReady(sprite)) {
       const size = p.type === 'torpedo' ? 42 : 52;
@@ -3230,17 +3666,23 @@ function checkCollisions() {
       const b = bullets[bi];
       if (!b.fromPlayer) continue;
       const cd = Math.hypot(b.x-boss.x, b.y-boss.y);
-      if (cd > BOSS_RADIUS + 4) continue;
+      if (cd > NODE_DIST + NODE_R + 4) continue;   // outside everything
+      // Nodes are tested FIRST and independently of the armour radius. If the
+      // armour check ran first it would eat every shot before it could reach a
+      // node — that is exactly the bug that made this boss invincible.
       let hitNode = null;
       for (const n of bossAliveNodes()) {
         const p = bossNodePos(n);
         if (Math.hypot(b.x-p.x, b.y-p.y) < NODE_R + 4) { hitNode = n; break; }
       }
-      bullets.splice(bi,1);
       if (hitNode) {
+        bullets.splice(bi,1);
         const p = bossNodePos(hitNode);
         damageBossNode(hitNode, 1, p.x, p.y);
-      } else {
+      } else if (cd <= BOSS_RADIUS) {
+        // Plating: absorbed with a clank. Shots in the angular gaps between
+        // nodes land here, which is what makes the rotation an aiming puzzle.
+        bullets.splice(bi,1);
         boss.hitFlash = Math.max(boss.hitFlash, 3);
         spawnParticles(b.x, b.y, 4, '#6A6A7A', 2.5, 14, 1.6);
         AudioFX.armorHit(b.x);
@@ -3309,7 +3751,7 @@ function checkCollisions() {
           player.y = e.y + ny * (e.radius + player.radius + 3);
           player.vx = nx * 5.5; player.vy = ny * 5.5;
           e.vx = -nx * 2.4; e.vy = -ny * 2.4;
-          e.state = 'recover'; e.stateTimer = kidMode ? 76 : 58;
+          e.state = 'recover'; e.stateTimer = kidMode ? 76 : RIFT_TENDRIL_TIER[e.tier].recovery;
         }
         spawnParticles(player.x, player.y, 20, '#3A7BFF', 5, 30, 3);
         AudioFX.shieldHit();
@@ -3471,6 +3913,10 @@ function renderTally() {
 function hideTally() {
   tally = null; shownBonus = null;
   tallyEl.classList.remove('show');
+  // The boss bar is only rendered from the PLAY branch, so a death or a quit
+  // mid-fight would otherwise leave it frozen over the game-over screen.
+  bossBarEl.classList.remove('show');
+  shownBossPips = null;
 }
 function updateTally() {
   if (!tally) return;
@@ -3562,6 +4008,10 @@ function startGame() {
   waveTransition = false;
   hitStop = 0; shake = 0; flash = 0;
   score = 0; lives = 3; wave = 1;
+  // Debug wave-skip: play/index.html?wave=10 starts straight into that wave
+  // (startWave() below handles boss spawning if it's a multiple of 10).
+  const debugWave = parseInt(new URLSearchParams(location.search).get('wave'), 10);
+  if (debugWave > 1) wave = debugWave;
   scoreMult = 1; multTimer = 0;
   lifeStep = LIFE_FIRST; nextLifeScore = LIFE_FIRST;
   hideTally(); clearToasts();
@@ -3682,6 +4132,13 @@ document.getElementById('nameInput').addEventListener('keydown', e => {
     row.appendChild(b);
   }
   setSkin(skin);   // sync swatch highlight + HUD life-icon tint on load
+}
+
+// Music picker: cycles AUTO -> each play track -> AUTO, persisted by AudioFX.
+{
+  const b = document.getElementById('btnTrack');
+  b.textContent = AudioFX.trackLabel();
+  b.onclick = () => { b.textContent = AudioFX.cycleTrack(); };
 }
 
 // ---- Touch controls ----
@@ -3895,6 +4352,7 @@ function loop(now) {
     drawPlayer();
     drawParticles();
     renderTally();
+    renderBossBar();
     document.getElementById('hudScore').textContent = score.toLocaleString();
     document.getElementById('hudWave').textContent = `WAVE ${wave}`;
     renderLives();

@@ -48,11 +48,29 @@ One-line fixes do not need a log.
   mixer with optional SUNO stems, ship skins, touch controls, HUD fit pass, pause
   keeps cockpit. **Note: ran concurrently with the Rift Tendril session in the same
   file — merged cleanly, verified post-merge, but don't repeat two-agent editing.**
+  **Appended same day:** soundtrack wired + re-encoded (27MB → 16MB, lazy loading);
+  playtest fixes (invincible boss, grid removal, nebula-follows-music, music picker);
+  Cascade Core art wired as a hybrid render with node metrics measured from the
+  sprite; boss health bar moved into the HUD pod gap.
+- [2026-08-07 — Cascade Core tendrils and enemy tiers](2026-08-07-session-log-cascade-core-tendrils.md)
+  *(Codex)* — boss tendril rendering, Rift Stalker/Tendril tier tables gated at waves
+  11 and 21, asteroid variants, drift mine, torpedo/multiplier pickup and boss-void
+  background art.
 
 ## Current Themes
 
 - Frame-rate independence is the recurring bug class — the wave-clear swarm only appeared
   because a per-frame check met a millisecond timer. Test timing changes at 144Hz.
+- **Static CSS values against content-dependent geometry always break eventually.**
+  Three separate overlaps (menu hints, then the boss bar twice) all came from a fixed
+  `%`/`rem` guess meeting a HUD whose height and width vary with viewport, wrapped icon
+  rows and 0–3 weapon chips. Measure with `getBoundingClientRect()` and position from
+  that.
+- **A passing test can hide the bug.** The invincible boss shipped with a green test
+  because it placed bullets *on* the node instead of firing them from outside — so it
+  never crossed the armour radius that was eating every real shot. Later, a false
+  "art leak" came from sampling a square grid whose corners fell outside the circular
+  region being tested. Test the real path, and sample the real shape.
 - Rendering fixes need measurement, not eyeballing. Pixel probes caught a 33% tone-curve
   dimming that looked like "bloom is just subtle".
 - The black background is load-bearing. Anything that lifts it (bloom knee, explosion

@@ -209,3 +209,139 @@ each wave change, and the boss track from wave 8.
   record `file://` media, so the "only one track loads" claim rests on the code path,
   not on a measurement. Worth confirming once in a real browser devtools Network tab.
 - **Still not heard.** No audio monitoring — transcode quality unverified by ear.
+
+---
+
+## Update — 2026-08-07 (playtest feedback: boss was unkillable)
+
+User played the build. Verdict: "genuinely really fun", but the wave-10 boss was
+**invincible**.
+
+### The bug, and why my earlier test missed it
+
+Nodes orbited at `NODE_DIST = 62`; player bullets were absorbed by armour as soon as
+they came within `BOSS_RADIUS + 4 = 90` of the centre. A bullet was therefore destroyed
+**28px before it could ever touch a node**. The boss could not be damaged by gunfire at
+all — only by torpedoes, which damage the nearest node through the armour. That is why
+it read as invincible rather than merely hard.
+
+My original verification created bullets **at the node coordinates with zero velocity**
+and called `checkCollisions()`. That never crossed the absorb radius, so it tested the
+node-damage branch in isolation and reported a pass. The lesson for this file: collision
+tests must fire projectiles **from outside, with real velocity, stepped through
+`updateBullets()`** — placing an object at its destination tests nothing about whether
+it can get there.
+
+Fix: nodes moved onto the rim (`NODE_DIST = 80`, `NODE_R = 15`, so
+`NODE_DIST + NODE_R > BOSS_RADIUS`), and node hits are tested *before* the armour
+check. Re-verified with real inbound bullets: aimed shot damages a node, a shot into
+the 45° gap is absorbed with no node damage, and the boss dies to 12 aimed shots.
+
+### Also in this pass
+- **Boss health bar** — DOM, magenta, with one pip per node; hides via `hideTally()`
+  so it cannot freeze over the game-over screen.
+- **Escalating adds** — phase 0 (on waking) 3 Stalkers, phase 1 (below 2/3 hp) 2
+  Tendrils, phase 2 (below 1/3 hp) 2 Stalkers + 2 Tendrils. Verified: 5 Stalkers and
+  4 Tendrils by the end, staggered.
+- **Grid removed** from `drawBackground` by explicit request.
+- **Nebula palette follows the music** (violet/blue/teal/magenta), eased over ~2s.
+- **Music picker** on the menu: AUTO or a forced track, persisted; boss always wins.
+- **Pause keeps the HUD** as well as the cockpit above the veil.
+- **Menu overlap fixed at the class level.** Measured the reported collision (skin row
+  738–760 vs pause hint 752–766 = 14px overlap at 790x790). Rather than nudging, the
+  two hints were moved from absolute positioning into normal flow, and screens now
+  scroll instead of clipping — at 1280x620 the menu logo had been clipped to −83px.
+  Verified no overlaps and no clipping at 790x790, 1280x620 and 1920x1080.
+
+### Verification
+- 21 waves including two full boss fights, full sim + draw: no exceptions.
+- Pause layering asserted (HUD and cockpit both z-index 12, cleared on resume).
+- Grid confirmed absent from the compiled `drawBackground`.
+- Death → restart → menu clean.
+
+### ⚠ Performance is NOT measured, and earlier figures were misleading
+Previous logs in this file quote figures like "median 0.30ms, p95 0.60ms". Those loops
+**did not call `drawBackground()`**, which the real frame loop calls every frame, so
+they understated true cost. Attempts to measure properly here failed: the preview pane
+is hidden, so nothing composites, `requestAnimationFrame` never fires, and a tight
+synchronous draw loop produced nonsense (max 1748ms). **Treat every frame-time number
+in this log as unverified.** The boss fight with 9 adds is the heaviest scene the game
+has ever had; it needs a real playtest, and if it stutters the phase-2 adds are the
+first thing to cut.
+
+---
+
+## Update — 2026-08-07 (boss art wired, third HUD-overlap fix)
+
+Playtest feedback session. Codex had concurrently added enemy tiers, three asteroid
+variants, drift mine / torpedo / multiplier / boss-background art, and a four-image
+Cascade Core set.
+
+### Merged-state verification (Codex tiers + this session's boss work)
+Ran both change sets together before touching anything: 22 waves incl. two boss
+fights, tier-tuned enemies, hazards, real inbound-projectile collision, pause
+layering, nebula mood, death/restart. No exceptions, no regressions.
+`enemyTierForWave()` gates correctly at 11/21 and my node-reachability fix survived.
+
+### Boss art — hybrid render (option A)
+The Codex art is **four whole-creature portraits at damage tiers**, not modular
+parts. A portrait cannot express an arbitrary live/dead node combination, so it
+cannot drive the mechanic on its own. Resolution: portrait supplies the body and
+baked tendrils (swapped at 75/50/25% total HP); the four functional node pips render
+**on top** at their exact rotated positions. Procedural path retained as fallback.
+
+**`NODE_DIST`/`NODE_R` are now MEASURED FROM THE ART, not designed.** Sampled the
+sprite with `getImageData`: the baked diamonds sit at exactly 0/90/180/270° at radius
+~64px, each with a ~26px glow footprint. Set `NODE_DIST = 64`, `NODE_R = 26` (was
+80/15). If the art is replaced, re-measure both — otherwise pips drift off the
+diamonds and a dead node leaks glow around its cover.
+
+Node reachability is now guaranteed by **check order** in `checkCollisions` (node-hit
+tested before the armour-absorb radius), not by keeping `NODE_DIST` outside
+`BOSS_RADIUS`. `BOSS_RADIUS` is now only the procedural fallback's ring radius.
+
+Later reduced the *visible* pip 30% via a new `NODE_VIS_R = NODE_R * 0.7`, used only
+for the two drawn shapes. `NODE_R` still drives the hit-test **and** the opaque cover
+circle, so the smaller glow did not shrink the target or reopen the cover leak.
+
+### A false alarm worth recording
+An early "art leaking through the dead-node cover" result was **my test being wrong**:
+a 30px *square* sample grid has corners at ~42px, reaching outside the circular
+~29px cover and picking up nearby tendril colour. Restricting the search to the actual
+cover radius showed a clean 723 (alive centre) vs 277 (dead, at the very edge).
+Sample within the shape you are actually testing.
+
+### Boss health bar — third and final overlap fix
+Two earlier attempts each looked right at one viewport and broke at others:
+`top: 10%` overlapped the wave/torpedo/shield row by 14–23px; a `--hud-safe-y` rem
+offset still overlapped by 17px once weapon chips and the overcharge underline
+stacked to their tallest. Measuring vertically fixed that but pushed the bar into the
+playfield.
+
+Final form: the bar sits **in the measured gap between the two HUD pods**, inside the
+cockpit instrument band. Both axes come from `getBoundingClientRect()` on the pods —
+vertical centring in the pod band, width = pod gap − 18px gutter each side, with a
+50%-viewport fallback if the gap drops under 120px. The **title was removed**: at
+720px natural width it was the only element too wide for the 486px gap, and
+`spawnBoss()` already toasts the name, so a permanent label repeated a one-time event.
+
+Verified with worst-case HUD content at 1920×1080 (bar 954px), 1280×800 (450px) and
+560×760 (177px) — 18px clearance both sides at every size.
+
+**Lesson, now three times over:** static CSS values against content-dependent geometry
+fail. The HUD's height and width vary with viewport, wrapped icon rows, and 0–3 weapon
+chips. Measure, never guess.
+
+### Also
+- Grid removal, nebula-follows-music, music picker and pause-keeps-HUD all confirmed
+  still working post-merge.
+- `SPRITE_STATUS.md` boss section rewritten to describe the hybrid and to mark the
+  modular ring/core/node pieces as **dropped, do not generate**. Priority list cleared
+  — no art gaps remain; medium/small asteroid tiers and optional UI art are all that
+  is left.
+
+### Still not verified
+Performance remains **unmeasured** — the preview pane does not composite, so rAF never
+fires and synchronous draw loops give nonsense. The wave-10 fight with up to 9 adds
+plus a 300px boss portrait is the heaviest scene in the game and needs a real
+playtest. Audio still unheard.

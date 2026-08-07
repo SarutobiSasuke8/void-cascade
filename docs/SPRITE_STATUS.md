@@ -30,29 +30,35 @@ game is always playable — a missing sprite is a downgrade, never a crash.
 | Sprite | Path | Status | Notes |
 |---|---|---|---|
 | Large asteroid 01 | `asteroids/large/asteroid_01.png` | ✅ | One master serves all three sizes |
-| Asteroid variants 02–04 | `asteroids/large/asteroid_02..04.png` | 🔲 | **Wanted.** Same matte rock language; the field currently repeats one silhouette. Needs a code change to pick randomly per rock |
-| Medium / small tiers | `asteroids/medium/`, `asteroids/small/` | 🔲 | Optional — the large master scales down acceptably. Lower priority than variants |
+| Asteroid variants 02–04 | `asteroids/large/asteroid_02..04.png` | ✅ | Three distinct matte-rock silhouettes; picked randomly per non-crystal rock |
+| Medium / small tiers | `asteroids/medium/asteroid_01.png`, `asteroids/small/asteroid_01.png` | ✅ | Dedicated compact and jagged masters now render at their respective tiers |
 | Crystal asteroid | — | ➖ | **Deliberately procedural.** Translucent faceted shard with a plasma-blue glow; a PNG cannot carry the additive edge glow the bloom pass needs |
 
 ## Hazards (new 2026-08-07)
 
 | Sprite | Path | Status | Notes |
 |---|---|---|---|
-| Drift mine | `hazards/drift_mine.png` | 🔲 | **Wanted.** Matte dark sphere, six magenta contact studs around the equator, heavy industrial read — it must look *inert* until armed. Armed strobe, warning ring and fuse are drawn procedurally on top, so the sprite is the idle body only |
+| Drift mine | `hazards/drift_mine.png` | ✅ | Matte dark industrial sphere with six magenta contact studs; armed strobe, warning ring and fuse remain procedural on top |
 | Gravity well | — | ➖ | **Do not draw.** It is an absence: black core, thin bright event-horizon rim, purple halo, three rotating accretion arcs, infalling sparks. All additive/procedural |
 
-## Boss — The Cascade Core (new 2026-08-07)
+## Boss — The Cascade Core (new 2026-08-07, art wired 2026-08-07)
 
-Currently 100% procedural and readable. Art here is the single biggest visual upgrade
-available, but it must be **three separate pieces**, because the ring rotates
-independently of the nodes and the nodes change state.
+**Now a hybrid render.** The Codex art is four whole-creature *portraits* at damage
+tiers, not modular parts — a single portrait cannot express an arbitrary combination
+of live/dead nodes (e.g. "north and west dead, east and south alive"). So the portrait
+supplies the body and baked tendrils, swapped by total remaining HP, and the four
+functional node pips are drawn **on top** at their exact rotated positions.
+
+`NODE_DIST` (64) and `NODE_R` (26) are **measured from the art**, not designed — the
+baked diamonds sit at exactly 0/90/180/270° at radius ~64px with a ~26px glow. If this
+art is ever replaced, re-measure both or the pips will drift off the diamonds and a
+dead node will leak the art's glow around its cover. See `STYLE_GUIDE.md`.
 
 | Sprite | Path | Status | Notes |
 |---|---|---|---|
-| Boss armour ring | `bosses/cascade_core/ring.png` | 🔲 | **Wanted.** Annulus, outer radius 86 / inner 48 in game units. Matte gunmetal plating with radial seams — must read as *invulnerable*, same matte language as asteroids. Transparent centre (the core glow renders beneath it) |
-| Boss core | `bosses/cascade_core/core.png` | 🔲 | **Wanted.** Magenta rift heart, ~84px diameter, drawn behind the ring and pulsing |
-| Boss node (alive) | `bosses/cascade_core/node_alive.png` | 🔲 | **Wanted.** Magenta orb in an armoured socket, ~32px. Four of these ride the ring face |
-| Boss node (dead) | `bosses/cascade_core/node_dead.png` | 🔲 | **Wanted.** Same socket, scorched and dark with ember rim — this is the player's progress read |
+| Cascade Core damage set | `enemies/cascade_core/cascade-core-{intact,damage-1,damage-2,damage-3}.png` | ✅ **in use** | 320×320 RGBA. Index = damage tier, swapped at 75/50/25% total HP. Drawn at 300px in game units |
+| Boss node pips | — | ➖ | Procedural, drawn over the portrait. Must stay procedural: they need live per-node state the portraits cannot carry |
+| Modular ring / core / node pieces | — | ❌ dropped | Superseded by the hybrid above. Do **not** generate these; the procedural fallback covers the no-art case |
 
 ## Powerups
 
@@ -62,8 +68,8 @@ independently of the nodes and the nodes change state.
 | Rapid fire | `powerups/rapid_fire.png` | ✅ | |
 | Spread fire | `powerups/spread_fire.png` | ✅ | |
 | Pierce shot | `powerups/pierce_shot.png` | ✅ | |
-| Torpedo pickup | `powerups/torpedo_resupply.png` | 🔲 | **Wanted.** Currently borrows a procedural ring; should match the other four (dark gunmetal module + orange torpedo glyph) |
-| Score multiplier star | `powerups/multiplier_star.png` | 🔲 | **Wanted.** Gold four-point star, `#FFD23F`, with a `×` at the core. Spins in game — keep it radially symmetric |
+| Torpedo pickup | `powerups/torpedo_resupply.png` | ✅ | Dark gunmetal module with an orange torpedo glyph |
+| Score multiplier star | `powerups/multiplier_star.png` | ✅ | Gold four-point star, `#FFD23F`, with a `×` core; remains radially symmetric while spinning |
 | Overcharge indicator | — | ➖ | HUD/CSS only |
 
 ## Weapons & Projectiles
@@ -81,15 +87,40 @@ independently of the nodes and the nodes change state.
 | Cockpit overlay (plain) | `ui/cockpit_overlay.png` | ✅ | |
 | Title banner | `ui/void_cascade_banner.png` | ✅ | |
 | Menu background | `backgrounds/menu_home.png` | ✅ | |
-| Boss-wave background | `backgrounds/boss_void.png` | 🔲 | **Optional.** A distinct backdrop for wave 10/20/30 would sell the setpiece. Must stay near-black — it cannot compete with the boss |
+| Boss-wave background | `backgrounds/boss_void.png` | ✅ | Near-black magenta/purple edge nebula, composited softly beneath the procedural boss scene |
 | Repo banner | `banner.jpg` | ✅ | |
+
+## UI components (not sprites — CSS/DOM, listed so nothing is double-built)
+
+These are already implemented in CSS and must **not** be drawn as images; they are
+listed so Codex does not duplicate them. If art is ever wanted for one, it replaces
+the CSS, it does not sit on top of it.
+
+| Component | Status | Notes |
+|---|---|---|
+| Boss health bar (`#bossBar`) | ➖ CSS | Magenta bar + one pip per node |
+| HUD shield bar / weapon chips / overcharge underline | ➖ CSS | |
+| Wave tally, toasts | ➖ CSS | Deliberately DOM, not canvas — bloom destroys canvas text |
+| Ship skin swatches, music picker | ➖ CSS | |
+| Touch control stick and buttons | ➖ CSS | Could take art later; low priority |
+
+## Wanted UI art (optional, would replace CSS)
+
+| Asset | Path | Status | Notes |
+|---|---|---|---|
+| Boss health bar frame | `ui/boss_bar_frame.png` | 🔲 | Optional. Ornate magenta/gunmetal bracket around the bar. Must be a 9-slice-able frame with a transparent centre |
+| Wave-transition banner | `ui/wave_banner.png` | 🔲 | Optional backing plate behind "WAVE n CLEAR" |
+| Button plate | `ui/btn_plate.png` | 🔲 | Optional. Menu buttons are currently pure CSS borders |
 
 ## Priority order for the next art pass
 
-1. **Boss set** (ring, core, node alive, node dead) — biggest payoff; the boss is the
-   game's new centrepiece and is currently the least finished thing on screen
-2. **Drift mine** — a new object the player must read instantly at a glance
-3. **Asteroid variants 02–04** — kills the single-silhouette repetition in every wave
-4. **Torpedo + multiplier pickups** — the last two procedural placeholders in a set
-   where the other four are finished art
-5. Boss-wave background — nice to have, lowest risk to skip
+The 2026-08-07 pass cleared the whole previous list — boss, drift mine, asteroid
+variants, torpedo and multiplier pickups, and the boss-wave background are all done
+and wired. What is left is genuinely optional:
+
+1. **Medium / small asteroid tiers** — the large masters scale down acceptably, so
+   this is polish, not a gap
+2. Optional UI art (boss-bar frame, wave banner, button plate) — each would *replace*
+   working CSS rather than fill a hole; only worth doing if the CSS starts to look
+   cheap next to the sprite work
+3. Nothing else is outstanding. Prefer playtest-driven fixes over new art from here.

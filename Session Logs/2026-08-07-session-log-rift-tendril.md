@@ -64,3 +64,10 @@ behaviour and wave pacing.
 | Thread | Next Step |
 |---|---|
 | Tendril feel | Play wave 5 and tune wind-up, charge speed and recovery. |
+
+## 2026-08-07 Tier Update
+
+- Formalised enemy tiers after boss waves: Tier 2 starts wave 11, Tier 3 starts
+  wave 21.
+- Rift Stalkers now tier in HP, turn rate and refire time; Rift Tendrils tier
+  in HP, ram speed and recovery. Enemy caps remain unchanged.
