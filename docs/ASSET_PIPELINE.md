@@ -60,5 +60,12 @@ Paths are relative to `play/`, so they are prefixed `../assets/`.
 
 ## Constants
 
-- Target aspect / virtual resolution: `TODO — document once fixed`
-- Base sprite resolution: `TODO — document once fixed`
+- Target aspect / virtual resolution: **none — the simulation runs at native window
+  resolution**, capped at `MAX_PIXELS = 2,100,000` canvas pixels (≈1920×1080); above
+  that the canvas renders smaller and CSS-scales up. There is no fixed aspect and no
+  letterboxing: `W`/`H` are whatever the window gives, so gameplay code must never
+  assume a resolution (documented 2026-08-07, from `resize()` in `play/index.html`).
+- Base sprite resolution: **1254×1254 RGBA PNG** for master sprites (ship, stalker,
+  asteroid — the existing convention). Sprites are drawn scaled far down (ship 58px,
+  stalker ~68px, large rock ~103px), so masters have generous headroom; keep new
+  masters square, transparent-background, and authored nose-right / facing +X.

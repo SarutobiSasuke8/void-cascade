@@ -56,4 +56,23 @@ These are always live, including during play. They are intentionally not rebinda
 - **Gamepad dead zone:** 0.2 on both axes, hard-coded.
 - **Kid Mode:** a menu checkbox, not an input binding. It auto-holds the shield and eases
   difficulty; it must never change what the documented keys do.
-- **Touch:** not implemented and not tested. Planned, not promised.
+- **Touch:** implemented 2026-08-07, tested only with synthetic TouchEvents — needs a
+  pass on real hardware.
+
+## Touch Controls (added 2026-08-07)
+
+Shown only when the device reports a coarse pointer (`pointer: coarse`), or on the
+first real `touchstart`. Feeds a `touchCtl` object that is OR-ed with keyboard and
+gamepad reads in the same polled model — no separate input path.
+
+| Action | Control |
+|---|---|
+| Steer + thrust | Floating stick, left 52% of the screen: touch down plants the stick, drag ≥12px steers the ship toward the drag direction (angle-seeking, capped at keyboard turn rate), drag ≥26px also thrusts |
+| Fire | FIRE button (hold to autofire), bottom right |
+| Torpedo | TORP button, left of FIRE |
+| Shield | SHLD button (held), above FIRE |
+| Pause / resume | II button, top right corner |
+
+All touch handlers `preventDefault()` and set `touch-action: none`, so play never
+scrolls or zooms the page. The stick uses one touch identifier; buttons are
+independent, so steer + fire + shield can be held simultaneously.

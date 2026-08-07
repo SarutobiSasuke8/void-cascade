@@ -42,6 +42,13 @@ One-line fixes do not need a log.
   pooling (late-wave p95 96.9ms → 13.9ms), life economy rebalance and cap, rebuilt
   thruster, wave tally/toasts moved to DOM for legibility.
 
+- [2026-08-07 — Hazards, boss, skins, touch, music scenes](2026-08-07-session-log-hazards-boss-skins-touch.md)
+  — thruster-as-acceleration SFX, timed OVERCHARGE tier, drift mines, gravity wells,
+  crystal asteroids, the Cascade Core (wave-10 boss with wrap-charge), music scene
+  mixer with optional SUNO stems, ship skins, touch controls, HUD fit pass, pause
+  keeps cockpit. **Note: ran concurrently with the Rift Tendril session in the same
+  file — merged cleanly, verified post-merge, but don't repeat two-agent editing.**
+
 ## Current Themes
 
 - Frame-rate independence is the recurring bug class — the wave-clear swarm only appeared

@@ -7,6 +7,7 @@ Record the source and licence of every asset at the moment it is added, not late
 | `ships/player_default.png` | AI-generated (project session, 2026-08-06) | Project-owned | 2026-08-06 |
 | `asteroids/large/asteroid_01.png` | AI-generated (project session, 2026-08-06) | Project-owned | 2026-08-06 |
 | `enemies/rift_stalker_01.png` | AI-generated (project session, 2026-08-06) | Project-owned | 2026-08-06 |
+| `enemies/rift_tendril/` (master, runtime sprite, idle preview) | AI-generated with OpenAI imagegen (project session, 2026-08-07) | Project-owned | 2026-08-07 |
 | `powerups/shield_charge.png` | AI-generated (project session, 2026-08-06) | Project-owned | 2026-08-06 |
 | `powerups/rapid_fire.png` | AI-generated (project session, 2026-08-06) | Project-owned | 2026-08-06 |
 | `powerups/spread_fire.png` | AI-generated with OpenAI imagegen (project session, 2026-08-07) | Project-owned | 2026-08-07 |
@@ -17,7 +18,10 @@ Record the source and licence of every asset at the moment it is added, not late
 | `ui/cockpit_overlay.png` | AI-generated with OpenAI imagegen (project session, 2026-08-07) | Project-owned | 2026-08-07 |
 | `ui/cockpit_overlay_hud.png` | AI-generated with OpenAI imagegen (project session, 2026-08-07) | Project-owned | 2026-08-07 |
 | `banner.jpg` | AI-generated (project session, 2026-08-06) | Project-owned | 2026-08-06 |
-| `audio/void_cascade_theme.mp3` | Custom theme track | `TODO — confirm origin and licence before any public release` | 2026-08-06 |
+| `audio/void_cascade_theme.mp3` | Made by the project owner with SUNO (AI music generation) | Project-owned per SUNO's terms for the generating account — reconfirm commercial terms of the account's SUNO plan before any *commercial* release | 2026-08-06 |
+| `audio/Hangar Full Burn.mp3` | Made by the project owner with SUNO (AI music generation) | As above | 2026-08-07 |
+| `audio/Maximum Thrust.mp3` | Made by the project owner with SUNO (AI music generation) | As above | 2026-08-07 |
+| `audio/Turn to Face You (Boss Battle).mp3` | Made by the project owner with SUNO (AI music generation) | As above | 2026-08-07 |
 
 ## Rules
 

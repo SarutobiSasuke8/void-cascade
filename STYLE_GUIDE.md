@@ -77,6 +77,17 @@ large 1→4 hits, medium 1→2 hits, small always one-shot. Kid Mode never gets 
 - Magenta trails and bullets (enemy energy stays magenta — only the player's
   exhaust and rock explosions moved to the fire palette)
 
+## Rift Tendril (added 2026-08-07)
+- A bio-mechanical heavy rammer: long squid-like chitin hull, trailing limbs
+  and one exposed electric-magenta core. It is a distinct unit, not a rename
+  or variant of the Rift Stalker fighter.
+- Enters from wave 5 at one per wave. Its presence caps Rift Stalkers at two,
+  protecting the playfield from stacking too many active enemy threats.
+- Behaviour: slow drift → bright core swell / locked heading → fast prow-first
+  ram → recovery. It does not fire bullets; the core swell is the dodge tell.
+- Starts at 5 hits and gains only one hit plus a small ram-speed step every five
+  waves. A full-health Tendril survives one torpedo direct hit.
+
 ## Particle Systems (priority juice)
 1. Thruster ribbons (continuous while thrusting)
 2. Muzzle flash (small cyan burst on fire)
@@ -133,8 +144,16 @@ the blown-out core of every explosion.
 ## Weapon Power-ups (added 2026-08-07)
 - Three weapon buffs, all dropped by asteroids: **RAPID** (refire delay ×0.62 per
   stack), **SPREAD** (3 / 5 / 7-bullet fan), **PIERCE** (bullets survive 1–3 impacts)
-- Each stacks to ×3, they combine freely, and the whole loadout **persists until the
-  ship is lost** — death resets all stacks (and the score multiplier)
+- Each stacks to ×3 and they combine freely. **×1 and ×2 persist until the ship is
+  lost**; death resets all stacks (and the score multiplier)
+- **×3 is OVERCHARGE and is temporary** (added 2026-08-07): it burns down to ×2 after
+  14s, so peak power is a burst to chase rather than a state to sit in. Another pickup
+  of the same type refreshes the full 14s rather than being wasted. The timer pauses
+  during the wave tally
+- Overcharged HUD entries switch from neon-cyan to gold (`#FFD23F`) at full opacity —
+  the same reward token as the multiplier — with a glow and a depletion underline that
+  drains left-to-right. The entry blinks over the last 3s, matching the multiplier's
+  expiry language. Expiry plays a soft descending power-down, not a failure sting
 - Piercing bullets render plasma-blue (`#3A7BFF`) so the buff is visible in flight;
   everything else the player fires stays neon-cyan
 - SPREAD/PIERCE pickups use generated dark-gunmetal modules with large readable
@@ -216,6 +235,128 @@ this rule — the exception was the mistake.
 - Menu music: the theme now attempts autoplay at page load and starts on the first
   click/keypress otherwise; a pulsing "CLICK OR PRESS ANY KEY FOR SOUND" hint shows
   on the home screen until audio is actually running
+
+## Hazards (added 2026-08-07)
+
+Hazards are **terrain, not enemies**: they never block wave clear.
+
+- **Drift mines (wave 4+, capped at 5, persist across waves):** matte dark sphere,
+  magenta contact studs, idle breathing pulse. Proximity lights a one-way ~0.43s fuse:
+  hard strobe + collapsing warning ring + two rising beeps. Blast (radius 130) deals a
+  bullet-grade hit to rocks and a 35-shield / lethal hit to the player. Shooting one
+  detonates it in place and pays 150×wave — sniping them is the counter-play. Nearby
+  mines chain on a short sympathetic fuse, not instantly.
+- **Gravity wells (wave 6+, 1–2 per wave, redealt each wave):** an absence, not a lamp —
+  black core, thin bright event-horizon rim, nebula-purple halo, three plasma-blue
+  accretion arcs, infalling spark trickle. No HP, no direct damage: pure inverse pull
+  (zero at rim, strongest at core) on ship, bullets (hardest — curving shots are the
+  point), torpedoes, rocks and pickups. Skipped on boss waves.
+
+## Crystal Asteroids (added 2026-08-07)
+
+The deliberate exception to "asteroids never glow": energy in mineral form. From wave 11
+~22% of large rocks spawn crystal — translucent faceted shards, plasma-blue fill,
+neon-cyan edge glow, inner facet lines. Always 1 hp (never armoured). A large crystal
+skips the medium tier and **shatters into six fast small slivers** (mediums into three);
+slivers die clean. Cold white/cyan/blue shatter burst — no embers — with a glassy
+shatter cue instead of the rock boom. Scores 75×size×wave (riskier pays better).
+
+## Boss: The Cascade Core (added 2026-08-07)
+
+Every 10th wave, replacing the normal spawn table (4 rocks, no stalkers/tendril/wells).
+
+- A slowly rotating armoured ring (radius 86, matte gunmetal like the rocks) around a
+  breathing magenta rift core, with **four magenta weak-point nodes** (2 + tier hp,
+  tier = wave/10). Plating is absolutely invulnerable — PIERCE does not go through —
+  so the ring's rotation is the aiming puzzle. Torpedo hits land 2 damage on the
+  nearest living node through the armour.
+- Phases by surviving nodes: 4–3 spits medium rocks (crystal-capable from wave 20);
+  at 2 it adds a 10-bullet radial ring with real gaps; at 1 it **charges across the
+  field and re-enters through the screen wrap** — locked magenta bearing-line
+  telegraph + klaxon first. Each node kill speeds the rotation.
+- Death: staggered ring explosions marching around the hull, then the core lets go.
+  Pays 10,000×tier plus three powerup drops. Node kills pay 1,000×tier.
+- Music: the boss scene hard-cuts in (see Audio); toast announces THE CASCADE CORE.
+
+## Ship Skins (added 2026-08-07)
+
+The accent-colour system from the ship section, realised: ION cyan (default), AURORA
+green `#00FF88`, SOLAR gold `#FFD23F`, VIOLET `#B44BFF`. **Magenta is deliberately
+excluded — that is the enemy's colour.** A skin changes only the accents: sprite is
+hue-rotated from cyan, procedural fallback strokes/wingtips/HUD life icons follow, and
+the rescue starfighter matches. Hull steel, rocket-fire thruster, plasma-blue shield
+and weapon colours stay canon. Picker: swatch row on the menu, persisted in
+`localStorage.vc_skin`.
+
+## Touch Controls (added 2026-08-07)
+
+Coarse-pointer devices get a floating steer stick (left half) and FIRE / TORP / SHLD /
+pause hold-buttons (right), all in the neon UI language at low alpha so the playfield
+stays readable. Full mapping in `docs/INPUT_CONTROL_MAP.md`.
+
+## Music Scenes (added 2026-08-07, revised same day)
+
+Three scenes driven by game state: **menu**, **play**, **boss** (hard cut in — the cut
+is the drama; everything else crossfades over 0.5s). During the wave tally and pause
+the music ducks under a ~650Hz low-pass so stingers and tally ticks cut through.
+
+The play scene **rotates a playlist** rather than layering stems (stems were built
+first, then dropped when the soundtrack went to full tracks). Rotation advances every
+`WAVES_PER_TRACK` (4) waves, landing on a wave boundary where the tally duck already
+masks the change. Any file that fails to load falls back to the theme, so the game
+still runs with one mp3.
+
+Current soundtrack — all made by the project owner with SUNO:
+
+| Slot | File | Notes |
+|---|---|---|
+| Menu | `void_cascade_theme.mp3` | Also first in the play rotation |
+| Play 1 (waves 1–4, 13–16, …) | `void_cascade_theme.mp3` | |
+| Play 2 (waves 5–8, 17–20, …) | `Hangar Full Burn.mp3` | |
+| Play 3 (waves 9–12, 21–24, …) | `Maximum Thrust.mp3` | Guitar-led |
+| Boss | `Turn to Face You (Boss Battle).mp3` | Hard cut on Core spawn |
+
+Filenames contain spaces and brackets, so the loader `encodeURI`s them — keep that if
+adding tracks. `TRACK_FILES`, `MENU_TRACK`, `PLAY_ORDER` and `WAVES_PER_TRACK` at the
+top of the music block are the only things to edit when the playlist changes.
+
+**Delivery rules (added 2026-08-07).** Music is by far the heaviest asset class, so:
+
+- Encode at **VBR `-q:a 6`** (~125kbps), 44.1kHz stereo, and **strip cover art**
+  (`-vn`) — SUNO exports ship an embedded mjpeg that costs real bytes. The set went
+  27MB → 16MB with no change to duration or structure.
+- **Only the menu track loads at startup.** Every other track is `preload="none"` and
+  its `MediaElementSource` is created lazily by `warm()`, because connecting an
+  element to the audio graph can start its fetch regardless of `preload`. Building
+  all four sources in `init()` pulled the whole soundtrack on page load.
+- Tracks are warmed **one step ahead**: the next rotation entry on every wave change,
+  and the boss track from wave 8, so no scene change waits on a download.
+- Adding a track means adding it to `TRACK_FILES` — the lazy path is automatic.
+
+## Audio revisions (2026-08-07, later pass)
+
+- **Thruster, second pass.** The first rebuild used saw partials through a Q=4.5
+  resonant lowpass with a large pitch sweep — it sang like a synth lead and cut
+  through everything. Now: triangles (octave, not fifth) through an almost-unresonant
+  lowpass at 300→720Hz, a small 22% pitch rise, and a louder lowpassed air layer. The
+  acceleration read comes from the filter opening, **not** from pitch. Rule going
+  forward: the thruster is a bed, never a voice — it must never carry a discernible
+  musical interval.
+- **Asteroid boom.** Removed the scattered high-passed debris-crackle bursts and the
+  bandpass body layer. With several rocks dying at once those piled into a constant
+  hiss-and-click behind the explosions. One lowpass sweep plus the sub layers: the
+  boom is **one sound, not two**.
+- **Rift Tendril arrival cue** — a slow low swell with no attack in it, distinct from
+  `bossAlarm` (which announces an imminent *move*, not a presence).
+
+## Rift Tendril entrance (added 2026-08-07)
+
+The Tendril no longer arrives mid-hunt. It spawns off-screen in an `enter` state:
+creeping inward at 0.85px/frame, hull fading up over ~1.5s, **core held at 35%** so
+the swell stays exclusively the attack tell. It cannot ram until it is properly
+on-field *and* its entry timer has run — measured ~3s to arrive, ~6s to the first ram.
+The entrance is the introduction; a heavy setpiece that spawns already charging reads
+as a cheap shot.
 
 ## Modding
 Keep a consistent folder structure for art/sound packs so future native ports stay drop-in compatible. The browser prototype is currently fully procedural (zero external assets) so it runs instantly.

@@ -20,6 +20,10 @@ milestone done. Copy it into the session log and mark each item.
 - [ ] Verified at 60Hz **and** 144Hz — the wave-transition guard is a frame-rate bug class
       that only appears at high refresh.
 - [ ] Enemy (Rift Stalker) spawn counts match the intended wave thresholds.
+- [ ] Rift Tendrils first appear in wave 5, never exceed one per wave, and cap
+      simultaneous Rift Stalkers at two.
+- [ ] Rift Tendril core swell is visible before every prow-first ram, and its
+      recovery gives a readable return to the slow-drift state.
 - [ ] Kid Mode measurably eases difficulty and auto-assists the shield without changing
       any documented key.
 

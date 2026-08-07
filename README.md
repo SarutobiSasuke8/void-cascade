@@ -39,7 +39,7 @@ The simulation is frame-rate independent, so it plays identically at 60, 120 and
 - Ship rotation + thrust with authentic inertia
 - High-velocity shooting
 - Breakable asteroids that split into smaller, faster fragments
-- Enemy fighters (**Rift Stalkers**)
+- Enemy fighters (**Rift Stalkers**) and heavy rammers (**Rift Tendrils**)
 - Stackable weapon power-ups (rapid / spread / pierce) that persist until you lose the ship
 - Score multipliers, wave-clear bonus tallies, extra ships at score milestones, and a
   rescuable lost starfighter

@@ -9,9 +9,15 @@
   :root {
     --hud-cyan: #00F5FF;
     --hud-blue: #3A7BFF;
-    --hud-safe-x: clamp(4.8rem, 5.5vw, 6.5rem);
-    --hud-safe-y: clamp(2.75rem, 5.1vh, 4rem);
-    --hud-pod-width: min(21vw, 320px);
+    /* Nudged inwards (2026-08-07) so both clusters sit inside the cockpit
+       frame's instrument pods instead of riding their outer edges. */
+    --hud-safe-x: clamp(5.6rem, 6.6vw, 7.8rem);
+    --hud-safe-y: clamp(3.1rem, 5.9vh, 4.6rem);
+    /* Wide enough for a full rack of 9 on ONE row (9×26 + 8 gaps = 266px).
+       When this was 20vw the lives wrapped to a second row and pushed the
+       shield bar down out of its cockpit pod — the wrap was the bug, not the
+       icon size, so this widens rather than shrinking the icons back. */
+    --hud-pod-width: min(24vw, 340px);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -62,6 +68,12 @@
       url('../assets/backgrounds/menu_home.png') center / cover no-repeat;
   }
   .screen.hidden { opacity: 0; pointer-events: none; }
+  /* Pause is a veil, not a room change: the frozen playfield stays readable
+     behind it, and body.paused lifts the cockpit frame above the veil so the
+     cockpit never vanishes mid-flight. The frame is pointer-events: none, so
+     the RESUME/QUIT buttons stay clickable underneath it. */
+  #pause { background: rgba(5, 1, 10, 0.55); }
+  body.paused #hudFrame { z-index: 12; }
   .logo {
     font-size: clamp(2.5rem, 8vw, 5.5rem);
     font-weight: 900;
@@ -145,18 +157,25 @@
     gap: 0.3rem;
     width: var(--hud-pod-width);
   }
+  /* The right pod is a fixed-height instrument bay in the cockpit art, so its
+     stack is kept tight — every px saved here is headroom for the shield bar. */
+  .hud-right { gap: 0.1rem; }
   .hud-right { align-items: flex-end; }
   .score { font-size: 1.6rem; font-weight: 700; color: #00F5FF; text-shadow: 0 0 12px #00F5FF; }
-  .lives { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 4px; min-height: 22px; max-width: 100%; }
-  .life-ship { width: 23px; height: 23px; object-fit: contain; filter: drop-shadow(0 0 3px rgba(0,245,255,0.45)); }
+  .lives { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 3px; min-height: 25px; max-width: 100%; }
+  /* Icon size tracks the viewport so a full rack of 9 always fits one row of
+     the pod at any desktop width — a wrapped second row is what pushed the
+     shield bar out of its cockpit bay. Caps at the intended 26px. */
+  .life-ship { width: clamp(14px, 2.2vw, 26px); height: clamp(14px, 2.2vw, 26px); object-fit: contain; filter: hue-rotate(var(--skin-hue, 0deg)) drop-shadow(0 0 4px rgba(0,245,255,0.65)); }
   .lives-empty { color: #FF00AA; }
   .wave { color: #3A7BFF; }
   .shield-bar {
-    width: 120px; height: 6px;
+    width: 140px; height: 9px;
     background: rgba(255,255,255,0.1);
-    border-radius: 3px;
+    border: 1px solid rgba(58,123,255,0.45);
+    border-radius: 4px;
     overflow: hidden;
-    margin-top: 4px;
+    margin-top: 2px;
   }
   .shield-fill {
     height: 100%;
@@ -164,6 +183,48 @@
     width: 0%;
     transition: width 0.15s;
   }
+  /* Touch controls. The layer itself ignores pointers; only the steer zone
+     and buttons take them, so the playfield stays clean under a mouse. */
+  #touchUI { display: none; position: absolute; inset: 0; z-index: 11; pointer-events: none; }
+  body.touch #touchUI { display: block; }
+  #touchSteer {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 52%;
+    pointer-events: auto; touch-action: none;
+  }
+  #stickBase, #stickKnob {
+    position: absolute; display: none;
+    border-radius: 50%; pointer-events: none;
+    transform: translate(-50%, -50%);
+  }
+  #stickBase { width: 96px; height: 96px; border: 2px solid rgba(0,245,255,0.35); }
+  #stickKnob { width: 40px; height: 40px; background: rgba(0,245,255,0.25); border: 2px solid rgba(0,245,255,0.7); }
+  .tbtn {
+    position: absolute; pointer-events: auto; touch-action: none;
+    width: 74px; height: 74px; border-radius: 50%;
+    background: rgba(0,245,255,0.08);
+    border: 2px solid rgba(0,245,255,0.5);
+    color: #00F5FF; font-family: inherit; font-size: 0.7rem; font-weight: 700;
+    letter-spacing: 0.12em; -webkit-user-select: none; user-select: none;
+  }
+  .tbtn:active { background: rgba(0,245,255,0.28); }
+  #tbFire { right: 4.5vw; bottom: 9vh; }
+  #tbTorp { right: calc(4.5vw + 86px); bottom: 6vh; border-color: rgba(255,138,36,0.6); color: #FF8A24; }
+  #tbShield { right: 5vw; bottom: calc(9vh + 88px); border-color: rgba(58,123,255,0.6); color: #3A7BFF; }
+  .tbtn.small { width: 60px; height: 60px; font-size: 0.58rem; }
+  .tbtn.tiny { width: 44px; height: 44px; font-size: 0.8rem; right: 2vw; top: 2vh; opacity: 0.6; }
+  /* Ship-skin picker: one swatch per accent colour, the selected one lit. */
+  .skin-row { display: flex; align-items: center; gap: 0.55rem; margin-top: 0.7rem; }
+  .skin-label { font-size: 0.62rem; letter-spacing: 0.25em; opacity: 0.75; color: #00F5FF; }
+  .skin-swatch {
+    width: 22px; height: 22px;
+    border: 2px solid rgba(255,255,255,0.25);
+    background: var(--sw);
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+  }
+  .skin-swatch:hover { transform: scale(1.15); }
+  .skin-swatch.sel { border-color: #FFFFFF; box-shadow: 0 0 12px var(--sw); transform: scale(1.15); }
   #pauseHint {
     position: absolute;
     bottom: 1.5rem;
@@ -197,15 +258,34 @@
     text-align: center;
     pointer-events: none;
   }
-  .torpedoes { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 3px; min-height: 18px; margin-top: 3px; max-width: 100%; }
-  .torpedo-icon { width: 18px; height: 18px; object-fit: contain; transform: rotate(-90deg); filter: drop-shadow(0 0 3px rgba(255,138,36,0.55)); }
-  .hud-label { font-size: 0.6rem; letter-spacing: 0.25em; margin-top: 4px; }
+  /* Right-cluster legibility pass (2026-08-07): larger torpedo icons with a
+     stronger ember glow — at 18px they disappeared against the frame. */
+  .torpedoes { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 3px; min-height: 24px; margin-top: 1px; max-width: 100%; }
+  .torpedo-icon { width: clamp(13px, 2.05vw, 24px); height: clamp(13px, 2.05vw, 24px); object-fit: contain; transform: rotate(-90deg); filter: drop-shadow(0 0 5px rgba(255,138,36,0.85)) brightness(1.15); }
+  .hud-label { font-size: 0.68rem; letter-spacing: 0.25em; margin-top: 2px; text-shadow: 0 0 6px currentColor; }
   .hud-label.torpedo-label { color: #FF8A24; text-align: right; }
   .hud-label.shield-label { color: #3A7BFF; }
   #hudMult { color: #FFD23F; text-shadow: 0 0 12px #FFD23F; font-size: 1.05rem; margin-left: 0.4rem; }
   #hudMult.blink { animation: multBlink 0.4s steps(2) infinite; }
   @keyframes multBlink { 50% { opacity: 0.25; } }
-  .weapons { font-size: 0.6rem; letter-spacing: 0.18em; color: #00F5FF; opacity: 0.85; min-height: 0.8em; }
+  /* Dimming sits on the individual entries, not the container, so the gold
+     overcharge entry can sit at full opacity against its dimmed neighbours. */
+  .weapons { font-size: 0.6rem; letter-spacing: 0.18em; color: #00F5FF; min-height: 0.8em; }
+  /* One span per active weapon buff. At ×3 the entry goes gold (the same
+     reward token as the score multiplier) and grows a depletion underline
+     showing how much OVERCHARGE is left — the bar is the only element that
+     changes per frame, so the label DOM is rebuilt only when a stack does. */
+  .wpn { display: inline-block; position: relative; padding-bottom: 3px; opacity: 0.85; }
+  .wpn + .wpn { margin-left: 0.9em; }
+  .wpn.oc { color: #FFD23F; opacity: 1; text-shadow: 0 0 8px #FFD23F, 0 0 18px rgba(255,210,63,0.5); }
+  .wpn.oc > i {
+    position: absolute; left: 0; bottom: 0; height: 2px; width: 100%;
+    background: #FFD23F; box-shadow: 0 0 6px #FFD23F;
+    transform-origin: left center;
+  }
+  /* Last ~3s: the whole entry blinks, matching the multiplier's expiry language. */
+  .wpn.oc.low { animation: ocPulse 0.5s steps(2) infinite; }
+  @keyframes ocPulse { 50% { opacity: 0.4; } }
   /* Wave tally and reward toasts live in the DOM, not on the game canvas.
      Drawn to the canvas they went through the bloom pass, which blew the
      letterforms out — measured 12-13% fully-saturated pixels either way, so a
@@ -428,6 +508,9 @@
         <input type="checkbox" id="kidMode">
         <label for="kidMode">KID MODE (easier)</label>
       </div>
+      <div class="skin-row" id="skinRow">
+        <span class="skin-label">SHIP</span>
+      </div>
       <div id="audioHint">CLICK OR PRESS ANY KEY FOR SOUND</div>
       <div id="pauseHint">ESC / START to pause • Gamepad supported</div>
     </div>
@@ -479,6 +562,19 @@
       </div>
     </div>
   </div>
+  <!-- Touch controls: hidden unless the device reports a coarse pointer (or a
+       first real touch arrives). Left half is a floating steer/thrust stick;
+       right side is FIRE / TORP / SHLD, with pause in the top corner. -->
+  <div id="touchUI" aria-hidden="true">
+    <div id="touchSteer">
+      <div id="stickBase"></div>
+      <div id="stickKnob"></div>
+    </div>
+    <button class="tbtn" id="tbFire">FIRE</button>
+    <button class="tbtn small" id="tbTorp">TORP</button>
+    <button class="tbtn small" id="tbShield">SHLD</button>
+    <button class="tbtn tiny" id="tbPause">II</button>
+  </div>
   <div id="hudFrame" aria-hidden="true">
     <img src="../assets/ui/cockpit_overlay_hud.png" alt="">
   </div>
@@ -511,6 +607,7 @@ const SPRITES = {
   player: new Image(),
   asteroid: new Image(),
   riftStalker: new Image(),
+  riftTendril: new Image(),
   shieldPickup: new Image(),
   rapidPickup: new Image(),
   spreadPickup: new Image(),
@@ -520,6 +617,7 @@ const SPRITES = {
 SPRITES.player.src = '../assets/ships/player_default.png';
 SPRITES.asteroid.src = '../assets/asteroids/large/asteroid_01.png';
 SPRITES.riftStalker.src = '../assets/enemies/rift_stalker_01.png';
+SPRITES.riftTendril.src = '../assets/enemies/rift_tendril/rift_tendril_01.png';
 SPRITES.shieldPickup.src = '../assets/powerups/shield_charge.png';
 SPRITES.rapidPickup.src = '../assets/powerups/rapid_fire.png';
 SPRITES.spreadPickup.src = '../assets/powerups/spread_fire.png';
@@ -612,7 +710,42 @@ const LIFE_FIRST = 50000, LIFE_GROWTH = 1.6;
 const MAX_LIVES = 9;                       // HUD row and difficulty both stop making sense past this
 let nextLifeScore = LIFE_FIRST, lifeStep = LIFE_FIRST;
 const MAX_WEAPON_STACK = 3;
+// The top stack level is OVERCHARGE: it is deliberately temporary. ×1 and ×2
+// persist for the whole life as before, but ×3 burns down to ×2 after this many
+// frames. Long enough that being overpowered is genuinely fun, short enough that
+// it cannot be the steady state for a whole run. Refreshed by another pickup of
+// the same type, so the reward for collecting at ×3 is more time, not nothing.
+const OVERCHARGE_TIME = 840;   // 14s at 60Hz — dt-scaled, so identical at any refresh rate
+const OVERCHARGE_KEYS = ['rapid', 'spread', 'pierce'];
 const SHIP_SCALE = 1.18;   // visual only — collision radius stays 14 (forgiving hitbox)
+// ---- Ship skins (STYLE_GUIDE accent-colour system) ----
+// A skin is only an accent swap: hull steel, rocket-fire thruster, shield blue
+// and weapon energy all stay canon. `hue` is the rotation from neon-cyan that
+// carries the sprite; `accent` colours the procedural fallback and HUD icons.
+// Magenta is deliberately absent — that is the enemy's colour.
+const SKINS = [
+  { id: 'ion',    name: 'ION',    accent: '#00F5FF', hue: 0 },
+  { id: 'aurora', name: 'AURORA', accent: '#00FF88', hue: -31 },
+  { id: 'solar',  name: 'SOLAR',  accent: '#FFD23F', hue: -137 },
+  { id: 'violet', name: 'VIOLET', accent: '#B44BFF', hue: 93 },
+];
+let skin = SKINS.find(s => s.id === localStorage.getItem('vc_skin')) || SKINS[0];
+function setSkin(s) {
+  skin = s;
+  localStorage.setItem('vc_skin', s.id);
+  // HUD life icons tint through a CSS variable (renderLives rebuilds the img
+  // tags on every life change, so inline styles would not survive).
+  document.documentElement.style.setProperty('--skin-hue', s.hue + 'deg');
+  document.querySelectorAll('.skin-swatch').forEach(el => {
+    el.classList.toggle('sel', el.dataset.skin === s.id);
+  });
+}
+// Accent with alpha for the procedural strokes (hex → rgba once per call site
+// is fine; drawPlayer only runs once a frame).
+function accentRGBA(alpha) {
+  const n = parseInt(skin.accent.slice(1), 16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${alpha})`;
+}
 let displayedLives = null;
 function renderLives() {
   if (displayedLives === lives) return;
@@ -635,16 +768,40 @@ function renderTorpedoes() {
     : '<span class="lives-empty">—</span>';
 }
 let displayedWeapons = null;
+let ocBars = {};        // weapon key → the depletion <i>, cached across frames
 function renderWeapons() {
   const w = player.weapons;
+  const oc = player.overcharge;
   const parts = [];
-  if (w.rapid) parts.push('RAPID ×' + w.rapid);
-  if (w.spread) parts.push('SPREAD ×' + w.spread);
-  if (w.pierce) parts.push('PIERCE ×' + w.pierce);
-  const s = parts.join('  ·  ');
-  if (s === displayedWeapons) return;
-  displayedWeapons = s;
-  document.getElementById('hudWeapons').textContent = s;
+  for (const k of OVERCHARGE_KEYS) {
+    if (w[k]) parts.push(k + ':' + w[k] + (oc[k] > 0 ? 'o' : ''));
+  }
+  const key = parts.join(',');
+  // Rebuild the labels only when a stack actually changes; the bars below are
+  // what animate, and they are transform-only so they never reflow the HUD.
+  if (key !== displayedWeapons) {
+    displayedWeapons = key;
+    ocBars = {};
+    const host = document.getElementById('hudWeapons');
+    host.textContent = '';
+    for (const k of OVERCHARGE_KEYS) {
+      if (!w[k]) continue;
+      const span = document.createElement('span');
+      span.className = oc[k] > 0 ? 'wpn oc' : 'wpn';
+      span.textContent = k.toUpperCase() + ' ×' + w[k];
+      if (oc[k] > 0) {
+        const bar = document.createElement('i');
+        span.appendChild(bar);
+        ocBars[k] = { bar, span };
+      }
+      host.appendChild(span);
+    }
+  }
+  for (const k in ocBars) {
+    const { bar, span } = ocBars[k];
+    bar.style.transform = 'scaleX(' + Math.max(0, oc[k] / OVERCHARGE_TIME) + ')';
+    span.classList.toggle('low', oc[k] < 180);
+  }
 }
 let displayedMult = null;
 function renderMult() {
@@ -744,7 +901,7 @@ if (binds.shield[0] === 'Backspace' && binds.shield[1] === 'ShiftLeft') {
 }
 function saveBinds() { localStorage.setItem('vc_binds', JSON.stringify(binds)); }
 function down(action) { return binds[action].some(c => keys[c]); }
-function shieldActive() { return down('shield') || gamepad.buttons[5]; }
+function shieldActive() { return down('shield') || gamepad.buttons[5] || touchCtl.shield; }
 
 // While the Controls screen is waiting for a key, this holds {action, slot}.
 // The capture listener below swallows the keypress so it cannot also pause the
@@ -780,16 +937,108 @@ window.addEventListener('keyup', e => keys[e.code] = false);
 // then. M mutes, persisted in localStorage.
 const AudioFX = (() => {
   let ac = null, master, sfx, musGain;
-  let noiseBuf, thrustGain, thrustLow, thrustMid, thrustSub;
+  // Idle pitch of the thruster tone; speed scales every partial off this.
+  const THRUST_F0 = 68;
+  let noiseBuf, thrustGain, thrustTone, thrustSub, thrustAir;
+  let thrustOscA, thrustOscB, thrustSubOsc, thrustFilt, thrustAirFilt;
   let verb, shaperCurve;
   let muted = localStorage.getItem('vc_muted') === '1';
   let musicOn = false;
 
-  // Theme music: a real track routed through the same master/mute graph as
-  // the sound effects rather than the old procedural synth loop.
-  const musicEl = new Audio('../assets/audio/void_cascade_theme.mp3');
-  musicEl.loop = true;
-  musicEl.preload = 'auto';
+  // ---- Music: scene mixer with a rotating gameplay playlist ----
+  // Three scenes — menu, play, boss. The play scene rotates through
+  // PLAY_ORDER so a long run does not loop one track for ten minutes; the
+  // track changes on wave boundaries (masked by the tally duck). Any missing
+  // file falls back to the theme, so the game still ships with one mp3.
+  // Filenames are encodeURI'd: the SUNO exports contain spaces and brackets.
+  const TRACK_FILES = {
+    theme:  'void_cascade_theme.mp3',
+    burn:   'Hangar Full Burn.mp3',
+    thrust: 'Maximum Thrust.mp3',
+    boss:   'Turn to Face You (Boss Battle).mp3',
+  };
+  const MENU_TRACK = 'theme';
+  const PLAY_ORDER = ['theme', 'burn', 'thrust'];
+  const WAVES_PER_TRACK = 4;   // rotate every 4 waves
+
+  const tracks = {};
+  function makeTrack(key, file, eager) {
+    const el = new Audio(encodeURI('../assets/audio/' + file));
+    el.loop = true;
+    // Only the menu track preloads. The soundtrack is ~16MB across four files;
+    // eager-loading all of it blocked the first paint on a download the player
+    // does not need for minutes. The rest are warmed one step ahead of use.
+    el.preload = eager ? 'auto' : 'none';
+    const t = { el, ok: null, gain: null };
+    el.addEventListener('canplaythrough', () => { if (t.ok === null) t.ok = true; }, { once: true });
+    el.addEventListener('error', () => { t.ok = false; }, { once: true });
+    tracks[key] = t;
+    return t;
+  }
+  for (const k in TRACK_FILES) makeTrack(k, TRACK_FILES[k], k === MENU_TRACK);
+  // Start fetching a track before it is needed, and wire it into the audio
+  // graph on first use, so a scene change does not land on an empty buffer.
+  // Idempotent, and safe to call before the context exists.
+  function warm(k) {
+    const t = tracks[k];
+    if (!t || t.warmed) return;
+    if (ac) {
+      if (!t.gain) return;                   // init() has not built the gains yet
+      try {
+        ac.createMediaElementSource(t.el).connect(t.gain);
+      } catch (e) { t.ok = false; return; }
+    } else {
+      return;   // wait for init(); the element must not fetch before then
+    }
+    t.warmed = true;
+    t.el.preload = 'auto';
+    try { t.el.load(); } catch (e) {}
+  }
+  const musicEl = tracks.theme.el;   // autoplay-recovery paths keep this name
+
+  let musFilter = null;
+  let scene = 'menu', playIndex = 0;
+  // `ok` is null until the file resolves, so an unloaded track is treated as
+  // usable and only demoted to the theme once the browser reports an error.
+  function usable(k) { return tracks[k] && tracks[k].ok !== false; }
+  function currentPlayTrack() {
+    const k = PLAY_ORDER[playIndex % PLAY_ORDER.length];
+    return usable(k) ? k : 'theme';
+  }
+  function sceneTracks(s) {
+    if (s === 'menu') return [usable(MENU_TRACK) ? MENU_TRACK : 'theme'];
+    if (s === 'boss') return [usable('boss') ? 'boss' : currentPlayTrack()];
+    return [currentPlayTrack()];
+  }
+  function applyScene() {
+    if (!ac) return;
+    const act = sceneTracks(scene);
+    const t0 = ac.currentTime;
+    // Boss entrance is a hard cut — the cut is the drama. Everything else
+    // crossfades gently.
+    const tc = scene === 'boss' ? 0.08 : 0.5;
+    for (const k in tracks) {
+      const t = tracks[k];
+      if (!t.gain) continue;
+      const on = act.includes(k);
+      t.gain.gain.setTargetAtTime(on ? 1 : 0, t0, tc);
+      if (on) warm(k);
+      if (on && musicOn && t.el.paused && t.ok !== false) {
+        t.el.play().catch(() => {});
+      } else if (!on && !t.el.paused) {
+        // Let the gain ramp finish, then park the element.
+        setTimeout(() => { if (!sceneTracks(scene).includes(k)) t.el.pause(); }, 800);
+      }
+    }
+  }
+  function ensurePlaying() {
+    if (!ac || !musicOn) return;
+    for (const k of sceneTracks(scene)) {
+      const t = tracks[k];
+      warm(k);   // a lazily-loaded track needs its fetch started before play()
+      if (t.el.paused && t.ok !== false) t.el.play().catch(() => {});
+    }
+  }
 
   function init() {
     if (ac) return;
@@ -822,56 +1071,85 @@ const AudioFX = (() => {
     // Soft-clip curve for the explosion bus: adds crunch and perceived weight.
     shaperCurve = new Float32Array(257);
     for (let i = 0; i < 257; i++) shaperCurve[i] = Math.tanh(2.2 * (i / 128 - 1));
-    musGain = ac.createGain(); musGain.gain.value = 0; musGain.connect(master);
-    ac.createMediaElementSource(musicEl).connect(musGain);
+    // Music graph: per-track gains (scene mixing) → musGain (on/off volume)
+    // → musFilter (the wave-tally / pause low-pass duck) → master.
+    musGain = ac.createGain(); musGain.gain.value = 0;
+    musFilter = ac.createBiquadFilter();
+    musFilter.type = 'lowpass'; musFilter.frequency.value = 18000; musFilter.Q.value = 0.6;
+    musGain.connect(musFilter); musFilter.connect(master);
+    // Gains only. The MediaElementSource for each track is created lazily in
+    // warm(), because connecting an element to the graph can start its fetch
+    // regardless of preload — building all four here would defeat the lazy
+    // loading and pull the whole ~16MB soundtrack at page load.
+    for (const k in tracks) {
+      const t = tracks[k];
+      t.gain = ac.createGain();
+      t.gain.gain.value = k === MENU_TRACK ? 1 : 0;
+      t.gain.connect(musGain);
+    }
+    warm(MENU_TRACK);   // the one track we do want ready immediately
 
     // one second of white noise, reused by every noise-based sound
     noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
 
-    // Thruster: a real rocket roar rather than a single dull rumble. One
-    // looped noise source feeds two bands — a low-pass body and a bandpass
-    // "air" hiss — alongside a sub oscillator for the chest thump. A slow LFO
-    // wobbles the hiss so the burn flickers instead of sitting as flat static.
-    // A continuous graph with smoothed gains avoids clicks from restarting.
+    // Thruster: a clean accelerating burn rather than a noisy roar. The core is
+    // tonal — two lightly detuned saw partials over a sine sub — and both their
+    // pitch and the lowpass cutoff ride ship speed, so holding thrust *sounds*
+    // like building acceleration instead of flat static. A thin filtered-noise
+    // layer sits well under the tone purely for air; there is no flicker LFO,
+    // which is what gave the old burn its rumbling roar. A continuous graph
+    // with smoothed gains avoids clicks from restarting sources.
     const src = ac.createBufferSource();
     src.buffer = noiseBuf; src.loop = true;
 
     thrustGain = ac.createGain(); thrustGain.gain.value = 0;
     thrustGain.connect(sfx);
-    // A light reverb send puts the burn in the same space as the explosions.
-    if (verb) { const ts = ac.createGain(); ts.gain.value = 0.12; thrustGain.connect(ts); ts.connect(verb); }
+    // Only a trace of reverb — the burn should read dry and immediate.
+    if (verb) { const ts = ac.createGain(); ts.gain.value = 0.05; thrustGain.connect(ts); ts.connect(verb); }
 
-    const lowF = ac.createBiquadFilter();
-    lowF.type = 'lowpass'; lowF.frequency.value = 260; lowF.Q.value = 1.4;
-    thrustLow = ac.createGain(); thrustLow.gain.value = 0.85;
-    src.connect(lowF); lowF.connect(thrustLow); thrustLow.connect(thrustGain);
+    // Tone core, deliberately dull (revised 2026-08-07): the first pass used
+    // saw partials through a Q=4.5 resonant filter, which sang — a synth lead,
+    // not an engine, and it cut straight through the mix. Triangles through an
+    // almost-unresonant lowpass give a warm hum with no piercing harmonics.
+    thrustFilt = ac.createBiquadFilter();
+    thrustFilt.type = 'lowpass'; thrustFilt.frequency.value = 300; thrustFilt.Q.value = 0.8;
+    thrustTone = ac.createGain(); thrustTone.gain.value = 0.5;
+    thrustFilt.connect(thrustTone); thrustTone.connect(thrustGain);
 
-    const midF = ac.createBiquadFilter();
-    midF.type = 'bandpass'; midF.frequency.value = 950; midF.Q.value = 0.9;
-    thrustMid = ac.createGain(); thrustMid.gain.value = 0.5;
-    src.connect(midF); midF.connect(thrustMid); thrustMid.connect(thrustGain);
+    thrustOscA = ac.createOscillator();
+    thrustOscA.type = 'triangle'; thrustOscA.frequency.value = THRUST_F0;
+    // Octave, not a fifth: a fifth reads as a musical interval (the old sound's
+    // "note"); an octave just thickens the fundamental.
+    thrustOscB = ac.createOscillator();
+    thrustOscB.type = 'triangle'; thrustOscB.frequency.value = THRUST_F0 * 2;
+    thrustOscB.detune.value = 6;  // slight beating keeps the tone from sounding synthetic
+    const oscBGain = ac.createGain(); oscBGain.gain.value = 0.22;
+    thrustOscA.connect(thrustFilt);
+    thrustOscB.connect(oscBGain); oscBGain.connect(thrustFilt);
+    thrustOscA.start(); thrustOscB.start();
 
-    // Flicker LFO on the hiss band.
-    const lfo = ac.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 7.5;
-    const lfoAmt = ac.createGain(); lfoAmt.gain.value = 0.22;
-    lfo.connect(lfoAmt); lfoAmt.connect(thrustMid.gain); lfo.start();
+    thrustSubOsc = ac.createOscillator();
+    thrustSubOsc.type = 'sine'; thrustSubOsc.frequency.value = THRUST_F0 * 0.66;
+    thrustSub = ac.createGain(); thrustSub.gain.value = 0.4;
+    thrustSubOsc.connect(thrustSub); thrustSub.connect(thrustGain);
+    thrustSubOsc.start();
 
-    const subOsc = ac.createOscillator();
-    subOsc.type = 'sawtooth'; subOsc.frequency.value = 46;
-    const subF = ac.createBiquadFilter(); subF.type = 'lowpass'; subF.frequency.value = 120;
-    thrustSub = ac.createGain(); thrustSub.gain.value = 0.42;
-    subOsc.connect(subF); subF.connect(thrustSub); thrustSub.connect(thrustGain);
-    subOsc.start();
+    // Air layer: lowpassed rush rather than a bandpassed hiss, and carrying
+    // more of the sound now that the tone is doing less.
+    thrustAirFilt = ac.createBiquadFilter();
+    thrustAirFilt.type = 'lowpass'; thrustAirFilt.frequency.value = 700; thrustAirFilt.Q.value = 0.5;
+    thrustAir = ac.createGain(); thrustAir.gain.value = 0.2;
+    src.connect(thrustAirFilt); thrustAirFilt.connect(thrustAir); thrustAir.connect(thrustGain);
 
     src.start();
   }
   function resume() {
     if (ac && ac.state === 'suspended') ac.resume();
-    // If an early autoplay attempt was blocked, the element is still paused
-    // with lastMusic already true — restart it now that we have a gesture.
-    if (ac && musicOn && musicEl.paused) musicEl.play().catch(() => {});
+    // If an early autoplay attempt was blocked, the elements are still paused
+    // with lastMusic already true — restart them now that we have a gesture.
+    ensurePlaying();
   }
 
   function env(g, t, attack, peak, decay) {
@@ -930,12 +1208,35 @@ const AudioFX = (() => {
     init, resume,
     isRunning() { return !!ac && ac.state === 'running'; },
     // Autoplay recovery: once the context is actually running, make sure the
-    // theme element is really playing (an early blocked play() leaves it
-    // paused while lastMusic already reads true).
+    // active scene's track is really playing (an early blocked play() leaves
+    // it paused while lastMusic already reads true).
     ensureMusic() {
-      if (ac && ac.state === 'running' && musicOn && musicEl.paused) {
-        musicEl.play().catch(() => {});
-      }
+      if (ac && ac.state === 'running') ensurePlaying();
+    },
+    // Scene routing, called from the frame loop. 'menu' | 'play' | 'boss'.
+    setScene(s) {
+      if (s === scene) return;
+      scene = s;
+      if (ac) applyScene();
+    },
+    // Which entry of PLAY_ORDER the play scene uses. Called with the wave, so
+    // the playlist advances every WAVES_PER_TRACK waves; the change lands on a
+    // wave boundary where the tally duck already covers the crossfade.
+    setPlayWave(w) {
+      // Warm one track ahead of the rotation, and the boss track two waves
+      // before it can appear, so neither switch waits on a download.
+      warm(PLAY_ORDER[(Math.floor((w - 1) / WAVES_PER_TRACK) + 1) % PLAY_ORDER.length]);
+      if (w >= 8) warm('boss');
+      const i = Math.floor((w - 1) / WAVES_PER_TRACK) % PLAY_ORDER.length;
+      if (i === playIndex) return;
+      playIndex = i;
+      if (ac && scene === 'play') applyScene();
+    },
+    // Low-pass duck: pulls the music under a blanket during the wave tally
+    // and pause so stingers and the tally ticks cut through.
+    duckMusic(on) {
+      if (!ac || !musFilter) return;
+      musFilter.frequency.setTargetAtTime(on ? 650 : 18000, ac.currentTime, on ? 0.2 : 0.35);
     },
     get muted() { return muted; },
     toggleMute() {
@@ -948,23 +1249,37 @@ const AudioFX = (() => {
       if (!ac || on === lastMusic) return;
       lastMusic = on; musicOn = on;
       musGain.gain.setTargetAtTime(on ? 0.42 : 0, ac.currentTime, on ? 0.6 : 0.25);
-      if (on) musicEl.play().catch(() => {}); else musicEl.pause();
+      if (on) applyScene();
+      else for (const k in tracks) tracks[k].el.pause();
     },
     restartMusic() {
       if (!ac) return;
-      musicEl.currentTime = 0;
-      if (musicOn) musicEl.play().catch(() => {});
+      for (const k of sceneTracks(scene)) {
+        try { tracks[k].el.currentTime = 0; } catch (e) {}
+        if (musicOn) tracks[k].el.play().catch(() => {});
+      }
     },
-    // `speed01` is the ship's speed as a fraction of max, so the burn thickens
-    // and brightens as you accelerate instead of being a flat on/off hiss.
+    // `speed01` is the ship's speed as a fraction of max. It drives pitch and
+    // cutoff together so the burn rises as the ship builds speed and settles
+    // back down as it coasts — the accelerating engine, not a flat hiss.
     setThrust(on, speed01 = 0) {
       if (!ac) return;
       const t = ac.currentTime;
       // Fast attack, slower release — a rocket lights instantly and trails off.
-      thrustGain.gain.setTargetAtTime(on ? 0.5 : 0, t, on ? 0.035 : 0.11);
+      thrustGain.gain.setTargetAtTime(on ? 0.38 : 0, t, on ? 0.03 : 0.1);
+      // Pitch glides even while coasting so the tone never snaps on release.
+      // The rise is small on purpose — a big sweep is what made the old burn
+      // sound like it was playing a melody. Most of the "accelerating" read
+      // now comes from the filter opening, not from pitch.
+      const m = 1 + speed01 * 0.22;
+      thrustOscA.frequency.setTargetAtTime(THRUST_F0 * m, t, 0.18);
+      thrustOscB.frequency.setTargetAtTime(THRUST_F0 * 2 * m, t, 0.18);
+      thrustSubOsc.frequency.setTargetAtTime(THRUST_F0 * 0.66 * m, t, 0.18);
+      thrustFilt.frequency.setTargetAtTime(300 + speed01 * 420, t, 0.16);
+      thrustAirFilt.frequency.setTargetAtTime(700 + speed01 * 700, t, 0.16);
       if (on) {
-        thrustMid.gain.setTargetAtTime(0.34 + speed01 * 0.42, t, 0.12);
-        thrustSub.gain.setTargetAtTime(0.34 + speed01 * 0.3, t, 0.12);
+        thrustSub.gain.setTargetAtTime(0.36 + speed01 * 0.2, t, 0.12);
+        thrustAir.gain.setTargetAtTime(0.17 + speed01 * 0.12, t, 0.12);
       }
     },
     zap() {
@@ -1000,15 +1315,16 @@ const AudioFX = (() => {
       // Explosion = pressure wave, sub-bass drop, low-end thump, then a burst
       // of bright debris crackle. Routed through the driven/panned/reverbed
       // bus so it lands where the rock was and rings out into the void.
+      // The scattered high-passed "debris crackle" bursts that used to trail
+      // every boom were removed (2026-08-07): with several rocks dying at once
+      // they piled into a constant hiss-and-click behind the explosions. The
+      // body layer's bandpass went with them — all the bright content is now
+      // in the single lowpass sweep, so the boom is one sound, not two.
       const bus = makeBus(panFor(x), 0.35 + size * 0.08, true);
       noise(t, 0.36 + size * 0.15, 0.5 + size * 0.12, 'lowpass', 1450, 60, bus);
-      noise(t + 0.018, 0.15 + size * 0.03, 0.18 + size * 0.05, 'bandpass', 2500, 420, bus);
       osc('sine', 92 + size * 13, 26, t, 0.48 + size * 0.05, 0.62, bus);
       osc('sine', 54 + size * 6, 24, t, 0.6 + size * 0.09, 0.45, bus);
       osc('triangle', 185, 45, t + 0.012, 0.22, 0.15, bus);
-      for (let i = 0; i < 2 + size; i++) {
-        noise(t + 0.05 + Math.random() * 0.2, 0.03, 0.04 + Math.random() * 0.05, 'highpass', 3200, 2500, bus);
-      }
     },
     enemyBoom(x) {
       if (!ac) return;
@@ -1072,6 +1388,66 @@ const AudioFX = (() => {
       osc('sine', 880, 880, t, 0.08, 0.2);
       osc('sine', 1320, 1320, t + 0.07, 0.12, 0.2);
       noise(t, 0.14, 0.06, 'highpass', 5200, 4200);
+    },
+    // Rift Tendril arriving: a slow low swell with no attack in it — this
+    // announces a presence, where bossAlarm announces an imminent move.
+    tendrilArrive() {
+      if (!ac) return;
+      const t = ac.currentTime;
+      osc('sine', 48, 72, t, 1.1, 0.3);
+      osc('triangle', 96, 144, t + 0.15, 0.9, 0.09);
+      noise(t, 1.0, 0.06, 'lowpass', 300, 900);
+    },
+    // Boss alarm: three rising minor-third klaxon blasts. Used for the spawn
+    // announcement and again as the charge telegraph — same sound, same
+    // meaning: something big is about to move.
+    bossAlarm() {
+      if (!ac) return;
+      const t = ac.currentTime;
+      for (let i = 0; i < 3; i++) {
+        osc('sawtooth', 220, 262, t + i * 0.22, 0.16, 0.16);
+        osc('square', 440, 524, t + i * 0.22, 0.14, 0.06);
+      }
+    },
+    // Boss death: the biggest sound in the game — deep pressure drop, long
+    // rumble, and a triumphant rising fifth so it reads as victory, not loss.
+    bossDeath(x) {
+      if (!ac) return;
+      const t = ac.currentTime;
+      const bus = makeBus(panFor(x), 0.8, true);
+      noise(t, 1.4, 0.7, 'lowpass', 1100, 60, bus);
+      osc('sine', 110, 30, t, 1.2, 0.5, bus);
+      osc('sawtooth', 262, 262, t + 0.5, 0.4, 0.14);
+      osc('sawtooth', 392, 392, t + 0.75, 0.7, 0.16);
+    },
+    // Crystal shatter: glassy, cold, no low end — a bright noise crack and
+    // two falling chime partials where a rock would thump.
+    shatter(x) {
+      if (!ac) return;
+      const t = ac.currentTime;
+      const bus = makeBus(panFor(x), 0.35, false);
+      noise(t, 0.09, 0.22, 'highpass', 4800, 2600, bus);
+      osc('triangle', 2400, 1150, t, 0.16, 0.14, bus);
+      osc('triangle', 3600, 1900, t + 0.03, 0.2, 0.09, bus);
+      osc('sine', 1200, 700, t + 0.02, 0.14, 0.07, bus);
+    },
+    // Mine fuse lighting: two fast rising square beeps, panned to the mine.
+    // Urgent but small — the strobe is the main tell, this is the ear's cue.
+    mineArm(x) {
+      if (!ac) return;
+      const t = ac.currentTime;
+      const bus = makeBus(panFor(x), 0.1, false);
+      osc('square', 660, 660, t, 0.05, 0.1, bus);
+      osc('square', 990, 990, t + 0.08, 0.06, 0.12, bus);
+    },
+    // Overcharge expiring: the multiplier chime played backwards and dulled —
+    // a power-down, not a failure. Quiet enough not to punctuate mid-fight.
+    overchargeEnd() {
+      if (!ac) return;
+      const t = ac.currentTime;
+      osc('sine', 1320, 1320, t, 0.09, 0.12);
+      osc('sine', 880, 660, t + 0.08, 0.22, 0.13);
+      noise(t + 0.05, 0.2, 0.03, 'lowpass', 1800, 500);
     },
     gameOver() {
       if (!ac) return;
@@ -1265,8 +1641,10 @@ function drawBackground() {
 }
 
 // Weapon power-ups live in `weapons` as stack counts (0–MAX_WEAPON_STACK).
-// They persist across the whole life and only reset when the ship is lost.
-const player = { x: 0, y: 0, angle: -Math.PI/2, vx: 0, vy: 0, radius: 14, thrust: false, fireCooldown: 0, invuln: 0, shield: 0, maxShield: 100, weapons: { rapid: 0, spread: 0, pierce: 0 }, torpedoes: 3, torpedoHeld: false };
+// Levels 1 and 2 persist across the whole life and only reset when the ship is
+// lost. Level 3 is OVERCHARGE and is timed: `overcharge` holds the frames left
+// at ×3 per weapon, counted down by updateOvercharge().
+const player = { x: 0, y: 0, angle: -Math.PI/2, vx: 0, vy: 0, radius: 14, thrust: false, fireCooldown: 0, invuln: 0, shield: 0, maxShield: 100, weapons: { rapid: 0, spread: 0, pierce: 0 }, overcharge: { rapid: 0, spread: 0, pierce: 0 }, torpedoes: 3, torpedoHeld: false };
 function resetPlayer() {
   player.x = CX; player.y = CY;
   player.vx = player.vy = 0;
@@ -1277,6 +1655,7 @@ function resetPlayer() {
   player.shield = kidMode ? 100 : 60;
   // Losing the ship costs the whole loadout and the score multiplier.
   player.weapons.rapid = player.weapons.spread = player.weapons.pierce = 0;
+  player.overcharge.rapid = player.overcharge.spread = player.overcharge.pierce = 0;
   scoreMult = 1;
   multTimer = 0;
   player.fireCooldown = 0;
@@ -1287,8 +1666,17 @@ function updatePlayer() {
   if (down('left')) rot -= 1;
   if (down('right')) rot += 1;
   rot += gamepad.axes[0];
+  // Touch stick steers by seeking the held direction: shortest angular error
+  // mapped onto the same rot input keys produce, so turn rate never exceeds
+  // keyboard turn rate.
+  if (touchCtl.steer !== null) {
+    let da = touchCtl.steer - player.angle;
+    while (da > Math.PI) da -= Math.PI * 2;
+    while (da < -Math.PI) da += Math.PI * 2;
+    rot += Math.max(-1, Math.min(1, da * 2.5));
+  }
   player.angle += rot * 0.085 * dt;
-  player.thrust = down('thrust') || gamepad.buttons[0] || gamepad.buttons[7];
+  player.thrust = down('thrust') || gamepad.buttons[0] || gamepad.buttons[7] || touchCtl.thrust;
   if (player.thrust) {
     const force = 0.18;
     player.vx += Math.cos(player.angle) * force * dt;
@@ -1320,7 +1708,7 @@ function updatePlayer() {
   if (player.y < -20) player.y = H+20;
   if (player.y > H+20) player.y = -20;
   player.fireCooldown -= dt;
-  const firePressed = down('fire') || gamepad.buttons[1] || gamepad.buttons[2];
+  const firePressed = down('fire') || gamepad.buttons[1] || gamepad.buttons[2] || touchCtl.fire;
   if (firePressed && player.fireCooldown <= 0) {
     const w = player.weapons;
     // Each RAPID stack multiplies the refire delay down: 12 → 7.4 → 4.6 → 2.9.
@@ -1336,7 +1724,7 @@ function updatePlayer() {
     spawnParticles(player.x + Math.cos(player.angle)*16, player.y + Math.sin(player.angle)*16, 4, '#00F5FF', 2, 12, 2);
     AudioFX.zap();
   }
-  const torpedoPressed = down('torpedo') || gamepad.buttons[3];
+  const torpedoPressed = down('torpedo') || gamepad.buttons[3] || touchCtl.torpedo;
   if (torpedoPressed && !player.torpedoHeld && player.torpedoes > 0) {
     const speed = 7.8;
     torpedoShots.push({
@@ -1405,8 +1793,11 @@ function drawPlayer() {
   if (spriteReady(SPRITES.player)) {
     // The generated interceptor is authored nose-right, matching the game's
     // local +X heading. Thruster flame and shield remain procedural above it.
+    // Skins hue-rotate the sprite's cyan accents; the steel barely shifts.
     const size = 58;
+    if (skin.hue) ctx.filter = `hue-rotate(${skin.hue}deg)`;
     ctx.drawImage(SPRITES.player, -size / 2, -size / 2, size, size);
+    ctx.filter = 'none';
     ctx.restore();
     return;
   }
@@ -1422,13 +1813,13 @@ function drawPlayer() {
     ctx.closePath();
     ctx.fillStyle = wingFill;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(0,245,255,0.75)';
+    ctx.strokeStyle = accentRGBA(0.75);
     ctx.lineWidth = 1.2;
     ctx.stroke();
     // wingtip light
     ctx.beginPath();
     ctx.arc(-5.5, 12.6*s, 1.2, 0, Math.PI*2);
-    ctx.fillStyle = '#00F5FF';
+    ctx.fillStyle = skin.accent;
     ctx.fill();
   }
 
@@ -1449,7 +1840,7 @@ function drawPlayer() {
   ctx.closePath();
   ctx.fillStyle = hull;
   ctx.fill();
-  ctx.strokeStyle = '#00F5FF';
+  ctx.strokeStyle = skin.accent;
   ctx.lineWidth = 1.3;
   ctx.stroke();
 
@@ -1457,7 +1848,7 @@ function drawPlayer() {
   ctx.fillStyle = '#2A3550';
   ctx.fillRect(-12.5, -3.6, 3, 2.6);
   ctx.fillRect(-12.5, 1.0, 3, 2.6);
-  ctx.strokeStyle = 'rgba(0,245,255,0.5)';
+  ctx.strokeStyle = accentRGBA(0.5);
   ctx.lineWidth = 0.8;
   ctx.strokeRect(-12.5, -3.6, 3, 2.6);
   ctx.strokeRect(-12.5, 1.0, 3, 2.6);
@@ -1576,11 +1967,25 @@ function generateCracks(n) {
   }
   return cracks;
 }
-function spawnAsteroid(x, y, size, speedMult=1) {
+function spawnAsteroid(x, y, size, speedMult=1, crystal=false) {
   const angle = Math.random()*Math.PI*2;
   const speed = (0.6 + Math.random()*1.2) * speedMult * (kidMode ? 0.7 : 1);
-  const hp = armorFor(size, wave);
-  asteroids.push({ x: x ?? Math.random()*W, y: y ?? Math.random()*H, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed, size, radius: size === 3 ? 42 : size === 2 ? 24 : 12, rot: Math.random()*Math.PI*2, rotSpeed: (Math.random()-0.5)*0.04, verts: generateAsteroidVerts(size), craters: generateCraters(size), hp, maxHp: hp, hitFlash: 0, cracks: hp > 1 ? generateCracks(2 + size) : null });
+  // Crystals are glass cannons: never armoured, they die to one hit — the
+  // threat is what they shatter into, not how long they take to kill.
+  const hp = crystal ? 1 : armorFor(size, wave);
+  asteroids.push({ x: x ?? Math.random()*W, y: y ?? Math.random()*H, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed, size, radius: size === 3 ? 42 : size === 2 ? 24 : 12, rot: Math.random()*Math.PI*2, rotSpeed: (Math.random()-0.5)*0.04, verts: crystal ? generateCrystalVerts() : generateAsteroidVerts(size), craters: generateCraters(size), hp, maxHp: hp, hitFlash: 0, cracks: hp > 1 ? generateCracks(2 + size) : null, crystal });
+}
+// Crystals are cut, not weathered: fewer vertices with harder radius swings
+// give a shard silhouette no tumbling rock could have.
+function generateCrystalVerts() {
+  const n = 6;
+  const verts = [];
+  for (let i=0; i<n; i++) {
+    const a = (i/n)*Math.PI*2 + (Math.random()-0.5)*0.3;
+    const r = i % 2 === 0 ? 0.95 + Math.random()*0.15 : 0.45 + Math.random()*0.25;
+    verts.push({ a, r });
+  }
+  return verts;
 }
 // Craters are fixed per asteroid in unit space (angle, distance from centre,
 // radius) so they tumble with the rock instead of swimming across it.
@@ -1626,6 +2031,47 @@ function drawAsteroids() {
     ctx.save();
     ctx.translate(a.x, a.y);
     ctx.rotate(a.rot);
+
+    // Crystals are the deliberate exception to "asteroids never glow": they
+    // are energy in mineral form, drawn as translucent faceted shards with a
+    // plasma-blue edge. Always procedural — the rock sprite would lie.
+    if (a.crystal) {
+      const glow = 0.55 + 0.2 * Math.sin(frame * 0.09 + a.rot * 3);
+      ctx.beginPath();
+      a.verts.forEach((v,i) => {
+        const x = Math.cos(v.a) * a.radius * v.r;
+        const y = Math.sin(v.a) * a.radius * v.r;
+        if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      });
+      ctx.closePath();
+      const fill = ctx.createRadialGradient(0, 0, a.radius*0.1, 0, 0, a.radius);
+      fill.addColorStop(0, 'rgba(122,200,255,0.30)');
+      fill.addColorStop(0.6, 'rgba(58,123,255,0.18)');
+      fill.addColorStop(1, 'rgba(26,10,46,0.35)');
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.strokeStyle = `rgba(0,245,255,${glow})`;
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+      // Inner facet lines from alternating points through the centre.
+      ctx.beginPath();
+      a.verts.forEach((v,i) => {
+        if (i % 2) return;
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(v.a) * a.radius * v.r, Math.sin(v.a) * a.radius * v.r);
+      });
+      ctx.strokeStyle = `rgba(58,123,255,${glow * 0.5})`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      if (a.hitFlash > 0) {
+        ctx.globalAlpha = a.hitFlash / 6 * 0.7;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      ctx.restore();
+      continue;
+    }
 
     if (spriteReady(SPRITES.asteroid)) {
       // One master remains legible across the three gameplay sizes; its matte
@@ -1717,6 +2163,27 @@ function maybeDropPowerup(x, y) {
   powerups.push({ x, y, vx: (Math.random()-0.5)*1.5, vy: (Math.random()-0.5)*1.5, type, life: 400, radius: 12 });
 }
 function splitAsteroid(a, idx, playSound=true) {
+  if (a.crystal) {
+    // Crystals shatter, not burn: a cold white-cyan-blue burst with no embers.
+    spawnParticles(a.x, a.y, 12 + a.size*6, '#FFFFFF', 8, 12, 1.8);
+    spawnParticles(a.x, a.y, 20 + a.size*10, '#00F5FF', 6, 26, 2.4);
+    spawnParticles(a.x, a.y, 14 + a.size*8, '#3A7BFF', 4, 38, 2.6);
+    if (playSound) AudioFX.shatter(a.x);
+    shake = Math.max(shake, 8 + a.size*4);
+    flash = 0.35;
+    hitStop = Math.max(hitStop, 1 + a.size * 1.2);
+    addScore(a.size * 75 * wave);   // riskier than rock, pays better
+    // The whole point of the species: a large crystal skips the medium tier
+    // and bursts into six fast slivers — SPREAD and PIERCE earn their keep.
+    if (a.size === 3) {
+      for (let i=0; i<6; i++) spawnAsteroid(a.x, a.y, 1, 2.4, true);
+    } else if (a.size === 2) {
+      for (let i=0; i<3; i++) spawnAsteroid(a.x, a.y, 1, 2.2, true);
+    }
+    maybeDropPowerup(a.x, a.y);
+    asteroids.splice(idx, 1);
+    return;
+  }
   // Fireball, layered by temperature: fast white flash-sparks, a yellow core,
   // an orange body, slow lingering deep-red embers, and matte grey rock
   // shrapnel that doesn't bloom. Different speeds and lifetimes per layer are
@@ -1775,7 +2242,99 @@ function spawnEnemy() {
   else if (side===1) { x=W+30; y=Math.random()*H; }
   else if (side===2) { x=Math.random()*W; y=-30; }
   else { x=Math.random()*W; y=H+30; }
-  enemies.push({ x, y, vx:0, vy:0, angle: 0, radius: 16, fireCooldown: 120 + Math.random()*60, hp: 2, seed: Math.random()*Math.PI*2 });
+  // Radius tracks the sprite draw size (same 1:3 ratio the old 16/48 had) now
+  // that the Stalker renders at the player ship's visual size.
+  enemies.push({ x, y, vx:0, vy:0, angle: 0, radius: 22, fireCooldown: 120 + Math.random()*60, hp: 2, seed: Math.random()*Math.PI*2 });
+}
+function spawnRiftTendril() {
+  const side = Math.floor(Math.random()*4);
+  let x,y;
+  if (side===0) { x=-90; y=Math.random()*H; }
+  else if (side===1) { x=W+90; y=Math.random()*H; }
+  else if (side===2) { x=Math.random()*W; y=-90; }
+  else { x=Math.random()*W; y=H+90; }
+  // The Tendril is a single heavy setpiece: its health only rises every five
+  // waves, while its ram gets fractionally quicker. It never fires bullets.
+  // It enters slowly and dark rather than arriving mid-hunt: 'enter' creeps in
+  // from off-screen with the core cold and the hull fading up, and cannot ram
+  // until it has fully arrived. The entrance is the introduction — a heavy
+  // setpiece that spawns already charging reads as a cheap shot.
+  const entryAngle = Math.atan2(CY - y + (Math.random()-0.5)*H*0.4,
+                                CX - x + (Math.random()-0.5)*W*0.4);
+  enemies.push({
+    type: 'tendril', x, y,
+    vx: Math.cos(entryAngle) * 0.85, vy: Math.sin(entryAngle) * 0.85,
+    angle: entryAngle,
+    radius: 34, hp: 5 + Math.floor((wave - 5) / 5), seed: Math.random()*Math.PI*2,
+    state: 'enter', stateTimer: 150, chargeCooldown: 170 + Math.random()*55,
+    entryFade: 0,
+    ramSpeed: 5.35 + Math.min(0.65, Math.floor((wave - 5) / 5) * 0.2)
+  });
+  AudioFX.tendrilArrive();
+}
+function updateRiftTendril(e, desired, da, dist) {
+  if (e.state === 'enter') {
+    // Slow creep inward, hull fading up, core cold. It only starts hunting
+    // once it is properly on-field AND the entry timer has run — so the first
+    // thing the player sees is a silhouette sliding in, not a ram.
+    e.entryFade = Math.min(1, e.entryFade + dt / 90);
+    e.angle += da * 0.006 * dt;            // barely steers; it is still arriving
+    e.x += e.vx * dt; e.y += e.vy * dt;
+    e.stateTimer -= dt;
+    const onField = e.x > 60 && e.x < W - 60 && e.y > 60 && e.y < H - 60;
+    if (e.stateTimer <= 0 && onField) {
+      e.state = 'drift';
+      e.entryFade = 1;
+      e.chargeCooldown = 130 + Math.random() * 60;   // still a beat before the first ram
+    }
+    return;
+  }
+  if (e.state === 'drift') {
+    e.angle += da * 0.016 * dt;
+    e.vx += Math.cos(e.angle) * 0.026 * (kidMode ? 0.72 : 1) * dt;
+    e.vy += Math.sin(e.angle) * 0.026 * (kidMode ? 0.72 : 1) * dt;
+    const drag = Math.pow(0.965, dt);
+    e.vx *= drag; e.vy *= drag;
+    e.x += e.vx * dt; e.y += e.vy * dt;
+    e.chargeCooldown -= dt;
+    // Stay at a dodgeable range and give the player a long, bright wind-up.
+    if (e.chargeCooldown <= 0 && dist > 150 && dist < 510) {
+      e.state = 'windup';
+      e.stateTimer = kidMode ? 58 : 46;
+      e.vx *= 0.35; e.vy *= 0.35;
+    }
+    return;
+  }
+  if (e.state === 'windup') {
+    e.angle += da * 0.11 * dt;
+    e.vx *= Math.pow(0.90, dt); e.vy *= Math.pow(0.90, dt);
+    e.x += e.vx * dt; e.y += e.vy * dt;
+    e.stateTimer -= dt;
+    if (e.stateTimer <= 0) {
+      e.state = 'charge';
+      e.stateTimer = kidMode ? 62 : 78;
+      e.vx = Math.cos(e.angle) * e.ramSpeed;
+      e.vy = Math.sin(e.angle) * e.ramSpeed;
+    }
+    return;
+  }
+  if (e.state === 'charge') {
+    e.x += e.vx * dt; e.y += e.vy * dt;
+    e.stateTimer -= dt;
+    if (Math.random() < 0.72) spawnTrail(e.x, e.y, e.angle, '#FF00AA');
+    if (e.stateTimer <= 0 || e.x < -140 || e.x > W+140 || e.y < -140 || e.y > H+140) {
+      e.state = 'recover';
+      e.stateTimer = kidMode ? 76 : 58;
+    }
+    return;
+  }
+  e.vx *= Math.pow(0.92, dt); e.vy *= Math.pow(0.92, dt);
+  e.x += e.vx * dt; e.y += e.vy * dt;
+  e.stateTimer -= dt;
+  if (e.stateTimer <= 0) {
+    e.state = 'drift';
+    e.chargeCooldown = 175 + Math.random()*65;
+  }
 }
 function updateEnemies() {
   for (let i=enemies.length-1; i>=0; i--) {
@@ -1786,6 +2345,10 @@ function updateEnemies() {
     let da = desired - e.angle;
     while (da > Math.PI) da -= Math.PI*2;
     while (da < -Math.PI) da += Math.PI*2;
+    if (e.type === 'tendril') {
+      updateRiftTendril(e, desired, da, dist);
+      continue;
+    }
     // Deliberately sluggish hunters: slow turn, gentle acceleration, long
     // refire and a shorter attack range, so they pressure rather than swarm.
     e.angle += da * 0.022 * dt;
@@ -1814,17 +2377,65 @@ function drawEnemies() {
     ctx.translate(e.x, e.y);
     ctx.rotate(e.angle);
 
+    if (e.type === 'tendril') {
+      const idle = Math.sin(frame * 0.055 + e.seed);
+      const entering = e.state === 'enter';
+      const fade = entering ? (e.entryFade || 0) : 1;
+      const windingUp = e.state === 'windup';
+      const charging = e.state === 'charge';
+      // Entering, the core is nearly dark — the swell must stay exclusively
+      // the attack tell, so an arriving Tendril must not glow like one about
+      // to ram.
+      const corePulse = windingUp
+        ? 0.86 + 0.14 * Math.sin(frame * 0.68 + e.seed)
+        : charging ? 1.14 : (0.58 + 0.16 * idle) * (entering ? 0.35 : 1);
+      const width = 142 * SHIP_SCALE * (charging ? 1.10 : 1);
+      const height = width * 0.52 * (1 + idle * 0.022);
+      if (spriteReady(SPRITES.riftTendril)) {
+        ctx.globalAlpha = (charging ? 1 : 0.94) * fade;
+        ctx.drawImage(SPRITES.riftTendril, -width/2, -height/2, width, height);
+      } else {
+        ctx.fillStyle = '#210E32';
+        ctx.beginPath(); ctx.ellipse(0, 0, 38, 20, 0, 0, Math.PI*2); ctx.fill();
+      }
+      // The visible swell is the attack contract: no magenta flare, no ram.
+      const coreX = width * 0.075;
+      const coreRadius = 10 + corePulse * (windingUp ? 15 : charging ? 12 : 5);
+      const core = ctx.createRadialGradient(coreX, 0, 1, coreX, 0, coreRadius);
+      core.addColorStop(0, '#FFFFFF');
+      core.addColorStop(0.22, '#FF77D2');
+      core.addColorStop(0.55, 'rgba(255,0,170,0.62)');
+      core.addColorStop(1, 'rgba(255,0,170,0)');
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = fade;
+      ctx.fillStyle = core;
+      ctx.beginPath(); ctx.arc(coreX, 0, coreRadius, 0, Math.PI*2); ctx.fill();
+      if (charging) {
+        ctx.strokeStyle = 'rgba(255,0,170,0.78)';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath(); ctx.moveTo(width*0.34, -height*0.18); ctx.lineTo(width*0.50, 0); ctx.lineTo(width*0.34, height*0.18); ctx.stroke();
+      }
+      ctx.restore();
+      continue;
+    }
+
     const pulse = 0.65 + 0.35 * Math.sin(frame * 0.18 + e.seed);
 
     if (spriteReady(SPRITES.riftStalker)) {
       // The generated ship faces right, matching the simulation's +X heading.
       // A slight pulse gives its magenta core life without baking another glow.
-      const size = 48;
+      // Drawn at the player ship's visual size (58 × SHIP_SCALE) so the two
+      // species read as peers rather than the hunter looking like a drone.
+      const size = 58 * SHIP_SCALE;
       ctx.globalAlpha = 0.9 + pulse * 0.1;
       ctx.drawImage(SPRITES.riftStalker, -size / 2, -size / 2, size, size);
       ctx.restore();
       continue;
     }
+
+    // Fallback manta was authored at the old 48px scale; bring it up to the
+    // same player-ship visual size as the sprite path above.
+    ctx.scale(58 * SHIP_SCALE / 48, 58 * SHIP_SCALE / 48);
 
     // Manta hull: swept-back curved wings with a rear notch.
     const hull = ctx.createLinearGradient(0, -12, 0, 12);
@@ -1865,6 +2476,485 @@ function drawEnemies() {
     ctx.restore();
   }
 }
+function destroyEnemy(e, index) {
+  const heavy = e.type === 'tendril';
+  spawnParticles(e.x, e.y, heavy ? 84 : 55, '#FF00AA', heavy ? 7.5 : 6, heavy ? 52 : 44, 3.2);
+  spawnParticles(e.x, e.y, heavy ? 38 : 24, '#FF5E00', heavy ? 5 : 4, heavy ? 40 : 32, 2.4);
+  spawnParticles(e.x, e.y, heavy ? 22 : 14, '#FFFFFF', heavy ? 9 : 8, heavy ? 18 : 15, 2);
+  AudioFX.enemyBoom(e.x);
+  addScore((heavy ? 600 : 250) * wave);
+  shake = Math.max(shake, heavy ? 20 : 14);
+  flash = heavy ? 0.58 : 0.4;
+  hitStop = Math.max(hitStop, heavy ? 6 : 4);
+  enemies.splice(index, 1);
+}
+function damageEnemy(e, index, amount) {
+  e.hp -= amount;
+  spawnParticles(e.x, e.y, e.type === 'tendril' ? 12 : 8, '#FF00AA', 3, 20, 2);
+  if (e.hp <= 0) destroyEnemy(e, index);
+}
+
+// ---- Hazards: drift mines (wave 4+) and gravity wells (wave 6+) ----
+// Both are terrain, not enemies: they never block wave clear, so the last
+// thing alive on a wave is always something you can hunt down and shoot.
+const mines = [];
+const wells = [];
+const MINE_TRIGGER = 110;   // proximity that lights the fuse
+const MINE_BLAST = 130;     // detonation radius
+const MINE_TELL = 26;       // fuse length in frames (~0.43s) — the escape window
+const WELL_RANGE = 260;     // gravity influence radius
+
+function spawnMine() {
+  if (mines.length >= 5) return;   // hard cap: terrain, not a minefield sim
+  let x, y, tries = 0;
+  do { x = Math.random()*W; y = Math.random()*H; tries++; }
+  while (Math.hypot(x-player.x, y-player.y) < 240 && tries < 50);
+  mines.push({ x, y, vx: (Math.random()-0.5)*0.5, vy: (Math.random()-0.5)*0.5,
+    radius: 11, fuse: -1, seed: Math.random()*Math.PI*2 });
+}
+function spawnWell() {
+  let x, y, tries = 0;
+  do { x = Math.random()*W; y = Math.random()*H; tries++; }
+  while (Math.hypot(x-player.x, y-player.y) < 300 && tries < 50);
+  wells.push({ x, y, vx: (Math.random()-0.5)*0.35, vy: (Math.random()-0.5)*0.35,
+    rot: 0, seed: Math.random()*Math.PI*2 });
+}
+
+function detonateMine(mi) {
+  const m = mines[mi];
+  mines.splice(mi, 1);
+  spawnParticles(m.x, m.y, 18, '#FFFFFF', 8, 14, 2);
+  spawnParticles(m.x, m.y, 26, '#FF00AA', 6.5, 26, 2.6);
+  spawnParticles(m.x, m.y, 22, '#FF5E00', 4, 40, 3);
+  AudioFX.boom(2, m.x);
+  shake = Math.max(shake, 14);
+  flash = 0.4;
+  // Rocks in the blast take a bullet-grade hit. Children pushed during a split
+  // land past the countdown start index, so the blast can't chain into them.
+  for (let ni = asteroids.length - 1; ni >= 0; ni--) {
+    const n = asteroids[ni];
+    if (Math.hypot(m.x-n.x, m.y-n.y) < MINE_BLAST + n.radius) damageAsteroid(n, ni, 1, false);
+  }
+  // Nearby mines sympathetically light their fuses (short, but still a tell)
+  // rather than chaining instantly — a rolling detonation reads better and
+  // avoids unbounded recursion.
+  for (const o of mines) {
+    const od = Math.hypot(m.x-o.x, m.y-o.y);
+    if (od < MINE_BLAST + 40) o.fuse = o.fuse < 0 ? 8 : Math.min(o.fuse, 8);
+  }
+  if (player.invuln <= 0 && Math.hypot(m.x-player.x, m.y-player.y) < MINE_BLAST + player.radius) {
+    if ((shieldActive() || kidMode) && player.shield > 5) {
+      player.shield = Math.max(0, player.shield - 35);
+      spawnParticles(player.x, player.y, 15, '#3A7BFF', 4, 25, 3);
+      AudioFX.shieldHit();
+    } else {
+      playerHit();
+    }
+  }
+}
+
+function updateMines() {
+  for (let i = mines.length - 1; i >= 0; i--) {
+    const m = mines[i];
+    m.x += m.vx * dt; m.y += m.vy * dt;
+    if (m.x < -m.radius) m.x = W + m.radius;
+    if (m.x > W + m.radius) m.x = -m.radius;
+    if (m.y < -m.radius) m.y = H + m.radius;
+    if (m.y > H + m.radius) m.y = -m.radius;
+    // The fuse is one-way: once lit it burns even if the player retreats —
+    // committing means the dodge is a real decision, not a hover-test.
+    if (m.fuse < 0) {
+      if (Math.hypot(player.x - m.x, player.y - m.y) < MINE_TRIGGER) {
+        m.fuse = MINE_TELL;
+        AudioFX.mineArm(m.x);
+      }
+    } else {
+      m.fuse -= dt;
+      if (m.fuse <= 0) detonateMine(i);
+    }
+  }
+}
+
+// One inward pull per object per well, strongest at the core, zero at the rim.
+// Bullets bend hardest — curving shots are the well's whole gameplay.
+function wellPullOn(o, k, w) {
+  const dx = w.x - o.x, dy = w.y - o.y;
+  const d = Math.hypot(dx, dy);
+  if (d < 8 || d > WELL_RANGE) return;
+  const t = 1 - d / WELL_RANGE;
+  const f = k * t * t * dt / d;
+  o.vx += dx * f; o.vy += dy * f;
+}
+function updateWells() {
+  for (const w of wells) {
+    w.x += w.vx * dt; w.y += w.vy * dt;
+    w.rot += 0.03 * dt;
+    if (w.x < -40) w.x = W + 40;
+    if (w.x > W + 40) w.x = -40;
+    if (w.y < -40) w.y = H + 40;
+    if (w.y > H + 40) w.y = -40;
+    wellPullOn(player, 0.085, w);
+    for (const b of bullets) wellPullOn(b, 0.14, w);
+    for (const t of torpedoShots) wellPullOn(t, 0.06, w);
+    for (const a of asteroids) wellPullOn(a, 0.03, w);
+    for (const p of powerups) wellPullOn(p, 0.05, w);
+    // A thin trickle of infalling sparks sells the pull direction. Goes
+    // through emit() so the sparks respect the pool and the particle cap.
+    if (Math.random() < 0.3 && particles.length < PARTICLE_CAP) {
+      const a = Math.random() * Math.PI * 2;
+      const r = WELL_RANGE * (0.5 + Math.random() * 0.4);
+      const px = w.x + Math.cos(a) * r, py = w.y + Math.sin(a) * r;
+      emit(px, py,
+        (w.x - px) / r * 2.2 + Math.cos(a + Math.PI/2) * 1.4,
+        (w.y - py) / r * 2.2 + Math.sin(a + Math.PI/2) * 1.4,
+        40, 40, 1.4, '#3A7BFF');
+    }
+  }
+}
+
+// Mines: matte dark sphere with magenta contact studs — armed, the core blinks
+// hard and a warning ring collapses inward over the fuse.
+function drawMines() {
+  for (const m of mines) {
+    ctx.save();
+    ctx.translate(m.x, m.y);
+    const armed = m.fuse >= 0;
+    const pulse = armed
+      ? (Math.floor(frame / 3) % 2 ? 1 : 0.25)              // hard strobe
+      : 0.45 + 0.25 * Math.sin(frame * 0.06 + m.seed);      // idle breathing
+    const body = ctx.createRadialGradient(-3, -3, 1, 0, 0, m.radius);
+    body.addColorStop(0, '#3A3A46');
+    body.addColorStop(0.6, '#20202A');
+    body.addColorStop(1, '#101018');
+    ctx.beginPath();
+    ctx.arc(0, 0, m.radius, 0, Math.PI*2);
+    ctx.fillStyle = body;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(12,12,16,0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    for (let s = 0; s < 6; s++) {
+      const a = (s / 6) * Math.PI * 2 + m.seed;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * m.radius, Math.sin(a) * m.radius, 1.6, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(255,0,170,${0.35 + pulse * 0.65})`;
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(0, 0, 3.2, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(255,0,170,${0.25 + pulse * 0.75})`;
+    ctx.fill();
+    if (armed) {
+      ctx.beginPath();
+      ctx.arc(0, 0, MINE_BLAST * (m.fuse / MINE_TELL), 0, Math.PI*2);
+      ctx.strokeStyle = `rgba(255,0,170,${0.15 + pulse * 0.25})`;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+// Gravity wells stay on the dark side of the palette: a black core, a
+// nebula-purple halo and three thin plasma-blue accretion arcs. The void
+// around them must remain almost black — the well is an absence, not a lamp.
+function drawWells() {
+  for (const w of wells) {
+    ctx.save();
+    ctx.translate(w.x, w.y);
+    const halo = ctx.createRadialGradient(0, 0, 4, 0, 0, WELL_RANGE * 0.55);
+    halo.addColorStop(0, 'rgba(0,0,0,0.95)');
+    halo.addColorStop(0.25, 'rgba(26,10,46,0.55)');
+    halo.addColorStop(1, 'rgba(26,10,46,0)');
+    ctx.beginPath();
+    ctx.arc(0, 0, WELL_RANGE * 0.55, 0, Math.PI*2);
+    ctx.fillStyle = halo;
+    ctx.fill();
+    for (let ring = 0; ring < 3; ring++) {
+      const rr = 22 + ring * 16;
+      const start = w.rot * (1 + ring * 0.35) + ring * 2.1;
+      ctx.beginPath();
+      ctx.arc(0, 0, rr, start, start + Math.PI * (1.1 - ring * 0.18));
+      ctx.strokeStyle = `rgba(58,123,255,${0.34 - ring * 0.08})`;
+      ctx.lineWidth = 2 - ring * 0.5;
+      ctx.stroke();
+    }
+    // Event-horizon rim: the one thin bright line that makes the black core
+    // read as an object instead of a hole in the render.
+    ctx.beginPath();
+    ctx.arc(0, 0, 13, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(122,160,255,0.8)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, 12, 0, Math.PI*2);
+    ctx.fillStyle = '#000000';
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ---- Boss: THE CASCADE CORE (every 10th wave) ----
+// A slowly rotating armoured ring with four magenta weak-point nodes. The
+// plating is invulnerable; only nodes take damage, and the ring's rotation
+// means at most a couple face the player at once — that is the aiming puzzle.
+// Phases by surviving nodes: 4-3 spits rocks, 2 adds a radial bullet ring,
+// 1 starts charging across the field and re-entering through the wrap — the
+// one behaviour that makes it an Asteroids boss and not a shmup boss.
+let boss = null;
+const BOSS_RADIUS = 86;   // outer armour radius
+const NODE_DIST = 62;     // node orbit radius on the ring face
+const NODE_R = 13;
+function bossTier() { return Math.max(1, Math.floor(wave / 10)); }
+
+function spawnBoss() {
+  const tier = bossTier();
+  boss = {
+    x: W / 2, y: -140, vx: 0, vy: 0.9,
+    rot: 0, rotSpeed: 0.006,
+    active: false,             // invulnerable + passive until fully on-field
+    nodes: [0, 1, 2, 3].map(i => ({ i, hp: 2 + tier, alive: true })),
+    spitCd: 240, ringCd: 200, hitFlash: 0,
+    chargeCd: 300, telegraph: 0, charging: 0, aimAngle: 0,
+    seed: Math.random() * Math.PI * 2
+  };
+  addToast('THE CASCADE CORE', '#FF00AA');
+  AudioFX.bossAlarm();
+}
+function bossNodePos(n) {
+  const a = boss.rot + n.i * Math.PI / 2;
+  return { x: boss.x + Math.cos(a) * NODE_DIST, y: boss.y + Math.sin(a) * NODE_DIST, a };
+}
+function bossAliveNodes() { return boss.nodes.filter(n => n.alive); }
+
+function damageBossNode(n, amount, hx, hy) {
+  n.hp -= amount;
+  boss.hitFlash = 6;
+  spawnParticles(hx, hy, 8, '#FF00AA', 3.5, 22, 2);
+  if (n.hp > 0) { AudioFX.armorHit(hx); return; }
+  n.alive = false;
+  spawnParticles(hx, hy, 45, '#FF00AA', 6, 44, 3.2);
+  spawnParticles(hx, hy, 20, '#FF5E00', 4, 36, 2.6);
+  spawnParticles(hx, hy, 14, '#FFFFFF', 8, 16, 2);
+  AudioFX.boom(3, hx);
+  shake = Math.max(shake, 16);
+  flash = 0.45;
+  hitStop = Math.max(hitStop, 5);
+  addScore(1000 * bossTier() * 1);
+  addToast('CORE NODE DOWN', '#FF00AA');
+  const left = bossAliveNodes().length;
+  if (left === 0) {
+    killBoss();
+  } else {
+    // Each lost node makes the ring meaner: faster spin, tighter cadences.
+    boss.rotSpeed += 0.004;
+    boss.ringCd = Math.min(boss.ringCd, 120);
+  }
+}
+function killBoss() {
+  const { x, y } = boss;
+  // Cascade death: five staggered explosions marching around the dead ring,
+  // then the core lets go. Timers route through later() so a quit cancels them.
+  for (let k = 0; k < 5; k++) {
+    later(() => {
+      const a = Math.random() * Math.PI * 2;
+      const px = x + Math.cos(a) * NODE_DIST, py = y + Math.sin(a) * NODE_DIST;
+      spawnParticles(px, py, 30, '#FF00AA', 5, 36, 3);
+      spawnParticles(px, py, 18, '#FF5E00', 4, 30, 2.6);
+      AudioFX.boom(2, px);
+      shake = Math.max(shake, 10);
+    }, 120 + k * 160);
+  }
+  later(() => {
+    spawnParticles(x, y, 70, '#FFFFFF', 9, 18, 2.4);
+    spawnParticles(x, y, 90, '#FF00AA', 6.5, 55, 3.6);
+    spawnParticles(x, y, 50, '#FFD23F', 5, 44, 3.2);
+    spawnParticles(x, y, 40, '#FF5E00', 3.6, 60, 3.4);
+    AudioFX.bossDeath(x);
+    shake = 30;
+    flash = 0.8;
+    hitStop = 10;
+  }, 950);
+  addScore(10000 * bossTier());
+  addToast('CASCADE CORE DESTROYED  +' + (10000 * bossTier()).toLocaleString(), '#FFD23F');
+  // The kill pays in materiel as well as points.
+  for (let k = 0; k < 3; k++) {
+    powerups.push({ x: x + (Math.random()-0.5)*80, y: y + (Math.random()-0.5)*80,
+      vx: (Math.random()-0.5)*1.2, vy: (Math.random()-0.5)*1.2,
+      type: ['shield','torpedo',['rapid','spread','pierce'][Math.floor(Math.random()*3)]][k],
+      life: 700, radius: 12 });
+  }
+  boss = null;
+}
+
+function updateBoss() {
+  if (!boss) return;
+  boss.rot += boss.rotSpeed * dt;
+  if (boss.hitFlash > 0) boss.hitFlash -= dt;
+
+  // Entrance: drift down into the field, then wake.
+  if (!boss.active) {
+    boss.y += boss.vy * dt;
+    if (boss.y > H * 0.3) { boss.active = true; boss.vx = 0.4; boss.vy = 0.15; }
+    return;
+  }
+
+  const alive = bossAliveNodes().length;
+  const phase = alive >= 3 ? 1 : alive === 2 ? 2 : 3;
+
+  if (boss.charging > 0) {
+    // Mid-charge: full speed, no steering, asteroid-style wrap — leaving one
+    // edge and arriving from the other is the whole trick.
+    boss.charging -= dt;
+    boss.x += boss.vx * dt; boss.y += boss.vy * dt;
+    if (boss.x < -BOSS_RADIUS) boss.x = W + BOSS_RADIUS;
+    if (boss.x > W + BOSS_RADIUS) boss.x = -BOSS_RADIUS;
+    if (boss.y < -BOSS_RADIUS) boss.y = H + BOSS_RADIUS;
+    if (boss.y > H + BOSS_RADIUS) boss.y = -BOSS_RADIUS;
+    if (Math.random() < 0.5) spawnTrail(boss.x, boss.y, Math.atan2(boss.vy, boss.vx), '#FF00AA');
+    if (boss.charging <= 0) {
+      // Never end a charge off-screen: keep burning until the wrap has put
+      // the ring back on the field, or it stalls just past an edge forever.
+      const off = boss.x < 0 || boss.x > W || boss.y < 0 || boss.y > H;
+      if (off) boss.charging = 10;
+      else { boss.vx *= 0.1; boss.vy *= 0.1; }
+    }
+  } else if (boss.telegraph > 0) {
+    // Locked aim + alarm already sounded; the beam renders in drawBoss.
+    boss.telegraph -= dt;
+    if (boss.telegraph <= 0) {
+      boss.vx = Math.cos(boss.aimAngle) * 8.5;
+      boss.vy = Math.sin(boss.aimAngle) * 8.5;
+      boss.charging = 85;
+    }
+  } else {
+    // Idle wander, steered gently back toward the field's middle.
+    boss.vx += (W/2 - boss.x) * 0.00002 * dt + Math.cos(frame * 0.01 + boss.seed) * 0.004 * dt;
+    boss.vy += (H/2 - boss.y) * 0.00002 * dt + Math.sin(frame * 0.008 + boss.seed) * 0.004 * dt;
+    const drag = Math.pow(0.985, dt);
+    boss.vx *= drag; boss.vy *= drag;
+    boss.x += boss.vx * dt; boss.y += boss.vy * dt;
+
+    boss.spitCd -= dt;
+    if (boss.spitCd <= 0 && asteroids.length < 10) {
+      boss.spitCd = phase === 1 ? 300 : 380;
+      spawnAsteroid(boss.x, boss.y, 2, 1.4, wave >= 20 && Math.random() < 0.3);
+      spawnParticles(boss.x, boss.y, 10, '#FF00AA', 3, 20, 2);
+    }
+    if (phase >= 2) {
+      boss.ringCd -= dt;
+      if (boss.ringCd <= 0) {
+        boss.ringCd = 230 - phase * 25;
+        // Radial ring with real gaps — flown through, not tanked.
+        const n = 10, off = Math.random() * Math.PI * 2;
+        for (let k = 0; k < n; k++) {
+          const a = off + (k / n) * Math.PI * 2;
+          bullets.push({ x: boss.x + Math.cos(a) * (BOSS_RADIUS + 8), y: boss.y + Math.sin(a) * (BOSS_RADIUS + 8),
+            vx: Math.cos(a) * 2.6, vy: Math.sin(a) * 2.6, life: 170, fromPlayer: false });
+        }
+        AudioFX.enemyBoom(boss.x);
+      }
+    }
+    if (phase === 3) {
+      boss.chargeCd -= dt;
+      if (boss.chargeCd <= 0) {
+        boss.chargeCd = 330 + Math.random() * 120;
+        boss.aimAngle = Math.atan2(player.y - boss.y, player.x - boss.x);
+        boss.telegraph = 40;
+        AudioFX.bossAlarm();
+      }
+    }
+  }
+}
+
+function drawBoss() {
+  if (!boss) return;
+  ctx.save();
+  ctx.translate(boss.x, boss.y);
+
+  // Charge telegraph: a locked magenta bearing line, flickering like a
+  // capacitor filling. Drawn under the hull so the ring stays readable.
+  if (boss.telegraph > 0) {
+    const flick = 0.35 + 0.4 * (Math.floor(frame / 2) % 2);
+    ctx.save();
+    ctx.rotate(boss.aimAngle);
+    const beam = ctx.createLinearGradient(BOSS_RADIUS, 0, BOSS_RADIUS + 900, 0);
+    beam.addColorStop(0, `rgba(255,0,170,${flick})`);
+    beam.addColorStop(1, 'rgba(255,0,170,0)');
+    ctx.fillStyle = beam;
+    ctx.fillRect(BOSS_RADIUS, -3, 900, 6);
+    ctx.restore();
+  }
+
+  ctx.rotate(boss.rot);
+
+  // Core rift: dark purple depths with a breathing magenta heart.
+  const corePulse = 0.6 + 0.4 * Math.sin(frame * 0.07 + boss.seed);
+  const core = ctx.createRadialGradient(0, 0, 2, 0, 0, 40);
+  core.addColorStop(0, `rgba(255,0,170,${0.5 + corePulse * 0.4})`);
+  core.addColorStop(0.4, 'rgba(120,0,90,0.5)');
+  core.addColorStop(1, 'rgba(26,10,46,0.9)');
+  ctx.beginPath();
+  ctx.arc(0, 0, 42, 0, Math.PI * 2);
+  ctx.fillStyle = core;
+  ctx.fill();
+
+  // Armoured annulus: matte gunmetal like the asteroids — armour must read
+  // as "not damageable" the same way rock reads as solid.
+  ctx.beginPath();
+  ctx.arc(0, 0, BOSS_RADIUS, 0, Math.PI * 2);
+  ctx.arc(0, 0, 48, 0, Math.PI * 2, true);
+  const plate = ctx.createRadialGradient(0, 0, 48, 0, 0, BOSS_RADIUS);
+  plate.addColorStop(0, '#20202A');
+  plate.addColorStop(0.5, '#2E2E3A');
+  plate.addColorStop(1, '#16161E');
+  ctx.fillStyle = plate;
+  ctx.fill();
+  ctx.strokeStyle = boss.hitFlash > 0 ? 'rgba(255,255,255,0.85)' : 'rgba(12,12,16,0.9)';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  // Plate seams
+  ctx.strokeStyle = 'rgba(10,10,14,0.8)';
+  ctx.lineWidth = 2;
+  for (let k = 0; k < 8; k++) {
+    const a = k * Math.PI / 4 + Math.PI / 8;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * 48, Math.sin(a) * 48);
+    ctx.lineTo(Math.cos(a) * BOSS_RADIUS, Math.sin(a) * BOSS_RADIUS);
+    ctx.stroke();
+  }
+
+  // Nodes: live ones are magenta orbs in armoured sockets; dead ones are
+  // scorched craters — progress you can read at a glance.
+  for (const n of boss.nodes) {
+    const a = n.i * Math.PI / 2;
+    const nx = Math.cos(a) * NODE_DIST, ny = Math.sin(a) * NODE_DIST;
+    ctx.beginPath();
+    ctx.arc(nx, ny, NODE_R + 3, 0, Math.PI * 2);
+    ctx.fillStyle = '#101018';
+    ctx.fill();
+    if (n.alive) {
+      const p = 0.6 + 0.4 * Math.sin(frame * 0.13 + n.i * 1.7);
+      const orb = ctx.createRadialGradient(nx, ny, 1, nx, ny, NODE_R);
+      orb.addColorStop(0, '#FFE0F4');
+      orb.addColorStop(0.35, '#FF00AA');
+      orb.addColorStop(1, 'rgba(255,0,170,0.15)');
+      ctx.beginPath();
+      ctx.arc(nx, ny, NODE_R * (0.85 + p * 0.15), 0, Math.PI * 2);
+      ctx.fillStyle = orb;
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(nx, ny, NODE_R * 0.7, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(20,10,14,0.9)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,94,0,0.35)';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
 
 const powerups = [];
 function updatePowerups() {
@@ -1893,19 +2983,26 @@ function drawPowerups() {
     // pulsing distress ring. Collecting it is +1 ship.
     if (p.type === 'starfighter') {
       const pulse = 0.5 + 0.5 * Math.sin(frame * 0.12);
+      // Same visual size as the live player ship (58 × SHIP_SCALE) — it IS the
+      // player's ship, so a smaller draw read as a toy rather than a rescue.
+      const sfSize = 58 * SHIP_SCALE;
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.beginPath();
-      ctx.arc(0, 0, 20 + pulse * 5, 0, Math.PI*2);
+      ctx.arc(0, 0, sfSize * 0.56 + pulse * 6, 0, Math.PI*2);
       ctx.strokeStyle = `rgba(0,245,255,${0.25 + pulse * 0.4})`;
       ctx.lineWidth = 2;
       ctx.stroke();
       ctx.restore();
       ctx.rotate(p.rot);
       if (spriteReady(SPRITES.player)) {
-        ctx.drawImage(SPRITES.player, -20, -20, 40, 40);
+        // Tinted like the live ship — the rescue IS the player's fighter.
+        if (skin.hue) ctx.filter = `hue-rotate(${skin.hue}deg)`;
+        ctx.drawImage(SPRITES.player, -sfSize / 2, -sfSize / 2, sfSize, sfSize);
+        ctx.filter = 'none';
       } else {
-        ctx.strokeStyle = '#00F5FF';
+        ctx.scale(sfSize / 40, sfSize / 40);
+        ctx.strokeStyle = skin.accent;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(13, 0); ctx.lineTo(-8, -8); ctx.lineTo(-4, 0); ctx.lineTo(-8, 8);
@@ -2021,7 +3118,7 @@ function spawnSpecial(type) {
   powerups.push({
     x, y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, type,
     life: type === 'mult' ? 480 : 640,
-    radius: type === 'mult' ? 13 : 16,
+    radius: type === 'mult' ? 13 : 20,   // starfighter reach tracks its bigger draw
     rot: 0,
     spin: (Math.random() < 0.5 ? -1 : 1) * (0.05 + Math.random() * 0.04)
   });
@@ -2035,6 +3132,23 @@ function updateSpecialSpawns() {
     // Do not float another rescue past the life cap — reroll the timer instead.
     if (lives < MAX_LIVES) spawnSpecial('starfighter');
     sfSpawnT = 5200 + Math.random() * 4800;
+  }
+}
+
+// Burn the OVERCHARGE (×3) tier down to ×2. Paused during the wave tally for
+// the same reason the special-spawn timers are — the breather is not play time,
+// and losing the buff while watching a bonus count up would read as a cheat.
+function updateOvercharge() {
+  if (waveTransition) return;
+  for (const k of OVERCHARGE_KEYS) {
+    if (player.overcharge[k] <= 0) continue;
+    player.overcharge[k] -= dt;
+    if (player.overcharge[k] <= 0) {
+      player.overcharge[k] = 0;
+      player.weapons[k] = MAX_WEAPON_STACK - 1;
+      addToast(k.toUpperCase() + ' OVERCHARGE SPENT  ×2', '#FF5E00');
+      AudioFX.overchargeEnd();
+    }
   }
 }
 
@@ -2055,6 +3169,11 @@ function checkCollisions() {
           const n = asteroids[ni];
           if (Math.hypot(x-n.x, y-n.y) < 110 + n.radius) damageAsteroid(n, ni, 2, false);
         }
+        // The blast also sweeps mines — they detonate in place, well away from
+        // wherever the player fired from.
+        for (let mi = mines.length - 1; mi >= 0; mi--) {
+          if (Math.hypot(x-mines[mi].x, y-mines[mi].y) < 110 + mines[mi].radius) detonateMine(mi);
+        }
         detonateTorpedo(ti, x, y);
         hit = true;
         break;
@@ -2064,11 +3183,28 @@ function checkCollisions() {
     for (let ei=enemies.length-1; ei>=0; ei--) {
       const e = enemies[ei];
       if (Math.hypot(t.x-e.x, t.y-e.y) < e.radius + t.radius) {
-        spawnParticles(e.x, e.y, 50, '#FF00AA', 6, 42, 3.2);
-        addScore(250 * wave);
-        enemies.splice(ei,1);
+        // The heavy Tendril survives one direct torpedo at full health; the
+        // player still gets a decisive burst of damage, not a free delete.
+        damageEnemy(e, ei, e.type === 'tendril' ? 4 : e.hp);
         detonateTorpedo(ti, t.x, t.y);
+        hit = true;
         break;
+      }
+    }
+    if (hit) continue;
+    // Torpedoes are the anti-boss weapon: a hit lands 2 damage on the nearest
+    // living node even through the armour — the blast finds the seams.
+    if (boss && boss.active && Math.hypot(t.x-boss.x, t.y-boss.y) < BOSS_RADIUS + t.radius) {
+      let best = null, bd = 1e9;
+      for (const n of bossAliveNodes()) {
+        const p = bossNodePos(n);
+        const d = Math.hypot(t.x-p.x, t.y-p.y);
+        if (d < bd) { bd = d; best = n; }
+      }
+      detonateTorpedo(ti, t.x, t.y);
+      if (best) {
+        const p = bossNodePos(best);
+        damageBossNode(best, 2, p.x, p.y);
       }
     }
   }
@@ -2086,6 +3222,46 @@ function checkCollisions() {
       }
     }
   }
+  // Player bullets vs the boss: nodes take damage, plating absorbs the shot
+  // with a clank. PIERCE does not punch through boss armour — that armour
+  // being absolute is what makes the rotation an aiming puzzle.
+  if (boss && boss.active) {
+    for (let bi=bullets.length-1; bi>=0; bi--) {
+      const b = bullets[bi];
+      if (!b.fromPlayer) continue;
+      const cd = Math.hypot(b.x-boss.x, b.y-boss.y);
+      if (cd > BOSS_RADIUS + 4) continue;
+      let hitNode = null;
+      for (const n of bossAliveNodes()) {
+        const p = bossNodePos(n);
+        if (Math.hypot(b.x-p.x, b.y-p.y) < NODE_R + 4) { hitNode = n; break; }
+      }
+      bullets.splice(bi,1);
+      if (hitNode) {
+        const p = bossNodePos(hitNode);
+        damageBossNode(hitNode, 1, p.x, p.y);
+      } else {
+        boss.hitFlash = Math.max(boss.hitFlash, 3);
+        spawnParticles(b.x, b.y, 4, '#6A6A7A', 2.5, 14, 1.6);
+        AudioFX.armorHit(b.x);
+      }
+    }
+  }
+  // Shooting a mine detonates it where it sits — sniping them from range is
+  // the intended counter-play, and it pays.
+  for (let bi=bullets.length-1; bi>=0; bi--) {
+    const b = bullets[bi];
+    if (!b.fromPlayer) continue;
+    for (let mi=mines.length-1; mi>=0; mi--) {
+      const m = mines[mi];
+      if (Math.hypot(b.x-m.x, b.y-m.y) < m.radius + 4) {
+        if (b.pierce > 0) b.pierce--; else bullets.splice(bi,1);
+        addScore(150 * wave);
+        detonateMine(mi);
+        break;
+      }
+    }
+  }
   for (let bi=bullets.length-1; bi>=0; bi--) {
     const b = bullets[bi];
     if (!b.fromPlayer) continue;
@@ -2093,23 +3269,12 @@ function checkCollisions() {
       const e = enemies[ei];
       if (Math.hypot(b.x-e.x, b.y-e.y) < e.radius + 4) {
         if (b.pierce > 0) b.pierce--; else bullets.splice(bi,1);
-        e.hp--;
-        spawnParticles(e.x, e.y, 8, '#FF00AA', 3, 20, 2);
-        if (e.hp <= 0) {
-          spawnParticles(e.x, e.y, 55, '#FF00AA', 6, 44, 3.2);
-          spawnParticles(e.x, e.y, 24, '#FF5E00', 4, 32, 2.4);
-          spawnParticles(e.x, e.y, 14, '#FFFFFF', 8, 15, 2);
-          AudioFX.enemyBoom(e.x);
-          addScore(250 * wave);
-          shake = Math.max(shake, 14);
-          flash = 0.4;
-          hitStop = Math.max(hitStop, 4);
-          enemies.splice(ei,1);
-        }
+        damageEnemy(e, ei, 1);
         break;
       }
     }
   }
+  collectPowerups();
   if (player.invuln > 0) return;
   const shielding = (shieldActive() || kidMode) && player.shield > 5;
   // Shield-ramming an asteroid destroys it (full split, scores normally) at a
@@ -2131,11 +3296,44 @@ function checkCollisions() {
     }
   }
   for (const e of enemies) {
-    if (Math.hypot(player.x-e.x, player.y-e.y) < e.radius + player.radius) {
+    const contactDist = Math.hypot(player.x-e.x, player.y-e.y);
+    if (contactDist < e.radius + player.radius) {
       if (shielding) {
-        player.shield = Math.max(0, player.shield - 40);
+        player.shield = Math.max(0, player.shield - (e.type === 'tendril' ? 58 : 40));
+        if (e.type === 'tendril') {
+          // A shielded ram is a costly counter, not an overlap that burns the
+          // entire shield across consecutive frames.
+          const nx = (player.x - e.x) / (contactDist || 1);
+          const ny = (player.y - e.y) / (contactDist || 1);
+          player.x = e.x + nx * (e.radius + player.radius + 3);
+          player.y = e.y + ny * (e.radius + player.radius + 3);
+          player.vx = nx * 5.5; player.vy = ny * 5.5;
+          e.vx = -nx * 2.4; e.vy = -ny * 2.4;
+          e.state = 'recover'; e.stateTimer = kidMode ? 76 : 58;
+        }
         spawnParticles(player.x, player.y, 20, '#3A7BFF', 5, 30, 3);
         AudioFX.shieldHit();
+        break;
+      } else {
+        playerHit();
+        return;
+      }
+    }
+  }
+  // The boss hull is a wall: shielded contact costs heavily and throws the
+  // ship clear (no overlap-lock); bare contact is death as usual.
+  if (boss && boss.active) {
+    const bd = Math.hypot(player.x-boss.x, player.y-boss.y);
+    if (bd < BOSS_RADIUS + player.radius) {
+      if (shielding) {
+        player.shield = Math.max(0, player.shield - 45);
+        const kx = (player.x - boss.x) / (bd || 1), ky = (player.y - boss.y) / (bd || 1);
+        player.x = boss.x + kx * (BOSS_RADIUS + player.radius + 2);
+        player.y = boss.y + ky * (BOSS_RADIUS + player.radius + 2);
+        player.vx = kx * 6; player.vy = ky * 6;
+        spawnParticles(player.x, player.y, 20, '#3A7BFF', 5, 30, 3);
+        AudioFX.shieldHit();
+        shake = Math.max(shake, 10);
       } else {
         playerHit();
         return;
@@ -2157,6 +3355,11 @@ function checkCollisions() {
       }
     }
   }
+}
+// Pickup collection lives outside the invuln early-return on purpose: a
+// respawned ship should still be able to scoop drops during its grace period.
+// (It used to sit below the return, which silently blocked collection.)
+function collectPowerups() {
   for (let i=powerups.length-1; i>=0; i--) {
     const p = powerups[i];
     if (Math.hypot(player.x-p.x, player.y-p.y) < player.radius + p.radius) {
@@ -2187,11 +3390,19 @@ function checkCollisions() {
           AudioFX.multiplierPickup();
         }
       } else {
-        // Weapon buffs stack to ×3 and persist until the ship is lost.
+        // Weapon buffs stack to ×2 permanently; the third level is a timed
+        // OVERCHARGE. Picking up at ×3 is not wasted — it refreshes the timer.
         const w = player.weapons;
         w[p.type] = Math.min(MAX_WEAPON_STACK, w[p.type] + 1);
-        addToast(p.type.toUpperCase() + ' ×' + w[p.type], p.type === 'pierce' ? '#3A7BFF' : '#00F5FF');
-        AudioFX.pickup();
+        if (w[p.type] === MAX_WEAPON_STACK) {
+          const refresh = player.overcharge[p.type] > 0;
+          player.overcharge[p.type] = OVERCHARGE_TIME;
+          addToast(p.type.toUpperCase() + (refresh ? ' OVERCHARGE +14s' : ' OVERCHARGED'), '#FFD23F');
+          AudioFX.multiplierPickup();
+        } else {
+          addToast(p.type.toUpperCase() + ' ×' + w[p.type], p.type === 'pierce' ? '#3A7BFF' : '#00F5FF');
+          AudioFX.pickup();
+        }
       }
       spawnParticles(p.x, p.y, 12, pickupColor, 3, 25, 2);
       powerups.splice(i,1);
@@ -2277,6 +3488,20 @@ function updateTally() {
 function startWave() {
   waveTransition = false;
   hideTally();
+  // Every 10th wave belongs to the Cascade Core: a thin rock field so the
+  // fight reads clean, no stalkers, no wells, no fresh mines. The boss is the
+  // wave.
+  if (wave % 10 === 0) {
+    wells.length = 0;
+    for (let i = 0; i < 4; i++) {
+      let x, y, tries = 0;
+      do { x = Math.random()*W; y = Math.random()*H; tries++; }
+      while (Math.hypot(x-CX, y-CY) < 220 && tries < 50);
+      spawnAsteroid(x, y, 3);
+    }
+    later(spawnBoss, 1200);
+    return;
+  }
   // Count plateaus at 14 large rocks (reached around wave 6); past that,
   // difficulty comes from armourFor() hardening them instead. Unbounded growth
   // was the direct cause of the late-wave stutter measured on 2026-08-07.
@@ -2287,13 +3512,32 @@ function startWave() {
       x = Math.random()*W; y = Math.random()*H;
       tries++;
     } while (Math.hypot(x-CX, y-CY) < 180 && tries < 50);
-    spawnAsteroid(x, y, 3);
+    // From wave 11 roughly a fifth of the big rocks are crystal — enough to
+    // change how a wave clears, not enough to change what the game is.
+    spawnAsteroid(x, y, 3, 1, wave >= 11 && Math.random() < 0.22);
   }
   // Rift Stalkers arrive from wave 3, one at first, capped at 3, spaced well
   // apart — pressure, not a swarm.
   if (wave > 2) {
-    const ec = Math.min(1 + Math.floor((wave - 3) / 2), 3);
+    // The Tendril takes the heavy-enemy slot from wave 5 onward, so we cap
+    // simultaneous Rift Stalkers at two instead of adding another swarm.
+    const ec = Math.min(1 + Math.floor((wave - 3) / 2), wave >= 5 ? 2 : 3);
     for (let i=0; i<ec; i++) later(spawnEnemy, 1200 + i*1500);
+  }
+  // A single Tendril begins appearing in wave 5. Its health and ram speed
+  // step up only once per five waves; never queue a second one.
+  if (wave >= 5) later(spawnRiftTendril, 2900);
+  // Gravity wells are per-wave setpieces: cleared and redealt each wave so the
+  // field never silts up with them. Mines persist across waves (they're
+  // terrain) but spawn capped and staggered.
+  wells.length = 0;
+  if (wave >= 6) {
+    const wc = Math.min(1 + Math.floor((wave - 6) / 4), 2);
+    for (let i=0; i<wc; i++) spawnWell();
+  }
+  if (wave >= 4) {
+    const mc = Math.min(2 + Math.floor((wave - 4) / 3), 4);
+    for (let i=0; i<mc; i++) later(spawnMine, 800 + i*900);
   }
 }
 function checkWaveClear() {
@@ -2302,7 +3546,7 @@ function checkWaveClear() {
   // ~90 frames at 60Hz: wave incremented 90 times and 90 spawns were queued,
   // turning a cleared wave 1 into wave 91 and 450 enemies arriving at once.
   if (waveTransition) return;
-  if (asteroids.length === 0 && enemies.length === 0 && state === State.PLAY) {
+  if (asteroids.length === 0 && enemies.length === 0 && !boss && state === State.PLAY) {
     waveTransition = true;
     // Tally the cleared wave, then advance. The longer 3400ms gap is the
     // points-counting phase; startWave clears the tally when the next set
@@ -2324,6 +3568,7 @@ function startGame() {
   resetSpecialTimers();
   asteroids.length = 0; enemies.length = 0; bullets.length = 0;
   torpedoShots.length = 0; powerups.length = 0; particles.length = 0;
+  mines.length = 0; wells.length = 0; boss = null;
   player.torpedoes = 3;
   resetPlayer();
   startWave();
@@ -2331,7 +3576,7 @@ function startGame() {
   AudioFX.restartMusic();
   document.getElementById('menu').classList.add('hidden');
   document.getElementById('gameover').classList.add('hidden');
-  document.getElementById('pause').classList.add('hidden');
+  setPauseScreen(false);
   document.getElementById('hud').classList.remove('hidden');
 }
 function endGame() {
@@ -2380,7 +3625,7 @@ function showMenu() {
   state = State.MENU;
   document.getElementById('menu').classList.remove('hidden');
   document.getElementById('gameover').classList.add('hidden');
-  document.getElementById('pause').classList.add('hidden');
+  setPauseScreen(false);
   document.getElementById('scores').classList.add('hidden');
   document.getElementById('controls').classList.add('hidden');
   document.getElementById('hud').classList.add('hidden');
@@ -2404,9 +3649,15 @@ document.getElementById('btnControls').onclick = () => {
 };
 document.getElementById('btnBackScores').onclick = showMenu;
 document.getElementById('btnBackControls').onclick = showMenu;
+// Single owner of pause-screen visibility so the body.paused flag (which keeps
+// the cockpit frame above the pause veil) can never drift out of sync with it.
+function setPauseScreen(on) {
+  document.getElementById('pause').classList.toggle('hidden', !on);
+  document.body.classList.toggle('paused', on);
+}
 document.getElementById('btnResume').onclick = () => {
   state = State.PLAY;
-  document.getElementById('pause').classList.add('hidden');
+  setPauseScreen(false);
 };
 document.getElementById('btnQuit').onclick = showMenu;
 document.getElementById('btnRetry').onclick = startGame;
@@ -2416,6 +3667,91 @@ document.getElementById('nameInput').addEventListener('keydown', e => {
   e.stopPropagation();
   if (e.key === 'Enter') saveScore();
 });
+
+// Skin picker: one swatch per SKINS entry, selection persisted by setSkin.
+{
+  const row = document.getElementById('skinRow');
+  for (const s of SKINS) {
+    const b = document.createElement('button');
+    b.className = 'skin-swatch';
+    b.dataset.skin = s.id;
+    b.style.setProperty('--sw', s.accent);
+    b.title = s.name;
+    b.setAttribute('aria-label', 'Ship skin: ' + s.name);
+    b.onclick = () => setSkin(s);
+    row.appendChild(b);
+  }
+  setSkin(skin);   // sync swatch highlight + HUD life-icon tint on load
+}
+
+// ---- Touch controls ----
+// A floating stick on the left half (touch down = stick centre, drag to steer
+// and thrust) and hold-buttons on the right. Feeds `touchCtl`, which the
+// input reads OR together with keys and gamepad — no separate code path.
+const touchCtl = { steer: null, thrust: false, fire: false, torpedo: false, shield: false };
+{
+  const enable = () => document.body.classList.add('touch');
+  if (window.matchMedia && matchMedia('(pointer: coarse)').matches) enable();
+  window.addEventListener('touchstart', enable, { once: true, passive: true });
+
+  const zone = document.getElementById('touchSteer');
+  const base = document.getElementById('stickBase');
+  const knob = document.getElementById('stickKnob');
+  let stickId = null, bx = 0, by = 0;
+  const MAXR = 48;      // knob travel; also the thrust threshold reference
+  function setKnob(dx, dy) {
+    knob.style.left = (bx + dx) + 'px';
+    knob.style.top = (by + dy) + 'px';
+  }
+  zone.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (stickId !== null) return;
+    const t = e.changedTouches[0];
+    stickId = t.identifier; bx = t.clientX; by = t.clientY;
+    base.style.display = knob.style.display = 'block';
+    base.style.left = bx + 'px'; base.style.top = by + 'px';
+    setKnob(0, 0);
+  }, { passive: false });
+  zone.addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      if (t.identifier !== stickId) continue;
+      let dx = t.clientX - bx, dy = t.clientY - by;
+      const d = Math.hypot(dx, dy);
+      if (d > MAXR) { dx *= MAXR / d; dy *= MAXR / d; }
+      setKnob(dx, dy);
+      // Dead zone, then steer; thrust needs a firmer push than steering so
+      // small aim corrections don't light the engine.
+      if (d > 12) { touchCtl.steer = Math.atan2(dy, dx); touchCtl.thrust = d > 26; }
+      else { touchCtl.steer = null; touchCtl.thrust = false; }
+    }
+  }, { passive: false });
+  const endStick = e => {
+    for (const t of e.changedTouches) {
+      if (t.identifier !== stickId) continue;
+      stickId = null; touchCtl.steer = null; touchCtl.thrust = false;
+      base.style.display = knob.style.display = 'none';
+    }
+  };
+  zone.addEventListener('touchend', endStick);
+  zone.addEventListener('touchcancel', endStick);
+
+  function holdButton(id, key) {
+    const el = document.getElementById(id);
+    el.addEventListener('touchstart', e => { e.preventDefault(); touchCtl[key] = true; }, { passive: false });
+    const off = e => { e.preventDefault(); touchCtl[key] = false; };
+    el.addEventListener('touchend', off);
+    el.addEventListener('touchcancel', off);
+  }
+  holdButton('tbFire', 'fire');
+  holdButton('tbTorp', 'torpedo');
+  holdButton('tbShield', 'shield');
+  document.getElementById('tbPause').addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (state === State.PLAY) { state = State.PAUSE; setPauseScreen(true); }
+    else if (state === State.PAUSE) { state = State.PLAY; setPauseScreen(false); }
+  }, { passive: false });
+}
 
 // B toggles the whole post chain on and off mid-frame, so the effect can be
 // judged by flipping it during play rather than by comparing screenshots.
@@ -2442,10 +3778,10 @@ window.addEventListener('keydown', e => {
   if (binds.pause.includes(e.code)) {
     if (state === State.PLAY) {
       state = State.PAUSE;
-      document.getElementById('pause').classList.remove('hidden');
+      setPauseScreen(true);
     } else if (state === State.PAUSE) {
       state = State.PLAY;
-      document.getElementById('pause').classList.add('hidden');
+      setPauseScreen(false);
     }
   }
 });
@@ -2506,6 +3842,12 @@ function loop(now) {
   frame += dt;
   pollGamepad();
   AudioFX.setMusic(state !== State.GAMEOVER);
+  // Scene follows game state: menu track outside play, boss track (hard cut)
+  // while the Core lives, rotating gameplay playlist otherwise.
+  AudioFX.setScene((state === State.PLAY || state === State.PAUSE)
+    ? (boss ? 'boss' : 'play') : 'menu');
+  AudioFX.setPlayWave(wave);
+  AudioFX.duckMusic(state === State.PAUSE || waveTransition);
   AudioFX.ensureMusic();
   if (AudioFX.isRunning() && audioHintEl.style.display !== 'none') {
     audioHintEl.style.display = 'none';
@@ -2531,14 +3873,21 @@ function loop(now) {
       updateTorpedoes();
       updateAsteroids();
       updateEnemies();
+      updateBoss();
+      updateMines();
+      updateWells();
       updatePowerups();
+      updateOvercharge();
       updateSpecialSpawns();
       updateParticles();
       updateTally();
       checkCollisions();
       checkWaveClear();
     }
+    drawWells();       // background layer: everything falls in front of them
+    drawBoss();
     drawAsteroids();
+    drawMines();
     drawEnemies();
     drawPowerups();
     drawBullets();

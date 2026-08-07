@@ -104,7 +104,7 @@ Run the narrowest useful check before finishing:
 | Performance-sensitive | Frame-time smoke over 400+ frames; report median and p95 |
 | Timing / waves / spawns | Simulate at 60, 90 and 144Hz — frame-rate bugs hide at 60 only |
 | Input changes | Re-verify against `docs/INPUT_CONTROL_MAP.md` and update it in the same change |
-| Asset changes | Confirm no dead `src` paths; add a row to `assets/CREDITS.md` |
+| Asset changes | Confirm no dead `src` paths; add a row to `assets/CREDITS.md` **and** update `docs/SPRITE_STATUS.md` |
 | Any change | No console errors across start → play → death → restart |
 
 If verification cannot be run, say exactly why and state the residual risk.
@@ -117,6 +117,7 @@ If verification cannot be run, say exactly why and state the residual risk.
 | Playtest gate | `docs/PLAYTEST_CHECKLIST.md` |
 | Control mapping | `docs/INPUT_CONTROL_MAP.md` |
 | Asset conventions | `docs/ASSET_PIPELINE.md` |
+| Sprite done/needed tracker | `docs/SPRITE_STATUS.md` |
 | Asset licensing | `assets/CREDITS.md` |
 | Working queue | `TODO.md` |
 | Session history | `Session Logs/` (append-only, see the index) |
