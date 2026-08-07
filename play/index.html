@@ -6,6 +6,13 @@
 <title>VOID CASCADE</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+  :root {
+    --hud-cyan: #00F5FF;
+    --hud-blue: #3A7BFF;
+    --hud-safe-x: clamp(4.8rem, 5.5vw, 6.5rem);
+    --hud-safe-y: clamp(2.75rem, 5.1vh, 4rem);
+    --hud-pod-width: min(21vw, 320px);
+  }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     background: #05010A;
@@ -31,6 +38,7 @@
   #ui {
     position: absolute;
     inset: 0;
+    z-index: 10;
     pointer-events: none;
     display: flex;
     flex-direction: column;
@@ -123,7 +131,7 @@
   .hud {
     position: absolute;
     top: 0; left: 0; right: 0;
-    padding: 1.2rem 2rem;
+    padding: var(--hud-safe-y) var(--hud-safe-x) 0;
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
@@ -131,9 +139,15 @@
     font-size: 0.95rem;
     letter-spacing: 0.1em;
   }
-  .hud-left, .hud-right { display: flex; flex-direction: column; gap: 0.3rem; }
+  .hud-left, .hud-right {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    width: var(--hud-pod-width);
+  }
+  .hud-right { align-items: flex-end; }
   .score { font-size: 1.6rem; font-weight: 700; color: #00F5FF; text-shadow: 0 0 12px #00F5FF; }
-  .lives { display: flex; justify-content: flex-end; align-items: center; gap: 4px; min-height: 22px; }
+  .lives { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 4px; min-height: 22px; max-width: 100%; }
   .life-ship { width: 23px; height: 23px; object-fit: contain; filter: drop-shadow(0 0 3px rgba(0,245,255,0.45)); }
   .lives-empty { color: #FF00AA; }
   .wave { color: #3A7BFF; }
@@ -166,8 +180,28 @@
     animation: hintPulse 1.6s ease-in-out infinite;
   }
   @keyframes hintPulse { 50% { opacity: 0.35; } }
-  .torpedoes { display: flex; justify-content: flex-end; gap: 3px; min-height: 18px; margin-top: 3px; }
+  #localFileNotice {
+    position: absolute;
+    left: 50%;
+    bottom: 1rem;
+    z-index: 20;
+    transform: translateX(-50%);
+    width: min(92vw, 700px);
+    padding: 0.7rem 1rem;
+    border: 1px solid rgba(255,210,63,0.65);
+    background: rgba(5,1,10,0.94);
+    color: #FFD23F;
+    font-size: 0.68rem;
+    line-height: 1.5;
+    letter-spacing: 0.08em;
+    text-align: center;
+    pointer-events: none;
+  }
+  .torpedoes { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 3px; min-height: 18px; margin-top: 3px; max-width: 100%; }
   .torpedo-icon { width: 18px; height: 18px; object-fit: contain; transform: rotate(-90deg); filter: drop-shadow(0 0 3px rgba(255,138,36,0.55)); }
+  .hud-label { font-size: 0.6rem; letter-spacing: 0.25em; margin-top: 4px; }
+  .hud-label.torpedo-label { color: #FF8A24; text-align: right; }
+  .hud-label.shield-label { color: #3A7BFF; }
   #hudMult { color: #FFD23F; text-shadow: 0 0 12px #FFD23F; font-size: 1.05rem; margin-left: 0.4rem; }
   #hudMult.blink { animation: multBlink 0.4s steps(2) infinite; }
   @keyframes multBlink { 50% { opacity: 0.25; } }
@@ -230,24 +264,35 @@
     72%  { opacity: 1; transform: translateY(0); }
     100% { opacity: 0; transform: translateY(-16px); }
   }
-  /* Sci-fi cockpit frame. Pure CSS overlay: pointer-events none so it can never
-     block the playfield, and only a few px deep at the extreme edges. */
-  #hudFrame { position: absolute; inset: 0; pointer-events: none; z-index: 9; }
-  .hf-corner {
-    position: absolute; width: 34px; height: 34px; opacity: 0.6;
-    filter: drop-shadow(0 0 6px rgba(0,245,255,0.55));
+  /* Generated cockpit frame. The image is mostly transparent and remains a
+     non-interactive perimeter layer so the playfield stays fully usable. */
+  #hudFrame { position: absolute; inset: 0; pointer-events: none; z-index: 9; overflow: hidden; }
+  #hudFrame img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+    opacity: 0.92;
+    filter: drop-shadow(0 0 7px rgba(0,245,255,0.22));
   }
-  .hf-corner.tl { top: 8px; left: 8px; border-top: 2px solid #00F5FF; border-left: 2px solid #00F5FF; }
-  .hf-corner.tr { top: 8px; right: 8px; border-top: 2px solid #00F5FF; border-right: 2px solid #00F5FF; }
-  .hf-corner.bl { bottom: 8px; left: 8px; border-bottom: 2px solid #00F5FF; border-left: 2px solid #00F5FF; }
-  .hf-corner.br { bottom: 8px; right: 8px; border-bottom: 2px solid #00F5FF; border-right: 2px solid #00F5FF; }
-  .hf-edge { position: absolute; opacity: 0.45; }
-  .hf-edge.top, .hf-edge.bottom { left: 18%; right: 18%; height: 1px; background: linear-gradient(90deg, transparent, rgba(0,245,255,0.5), transparent); }
-  .hf-edge.top { top: 8px; }
-  .hf-edge.bottom { bottom: 8px; }
-  .hf-edge.left, .hf-edge.right { top: 24%; bottom: 24%; width: 1px; background: linear-gradient(180deg, transparent, rgba(0,245,255,0.5), transparent); }
-  .hf-edge.left { left: 8px; }
-  .hf-edge.right { right: 8px; }
+  @media (max-width: 620px), (max-height: 520px) {
+    :root {
+      --hud-safe-x: clamp(0.85rem, 4vw, 1.4rem);
+      --hud-safe-y: clamp(1.65rem, 5vh, 2.25rem);
+      --hud-pod-width: 27vw;
+    }
+    .hud { font-size: 0.68rem; }
+    .hud-left, .hud-right { gap: 0.1rem; }
+    .score { font-size: clamp(0.9rem, 4.2vw, 1.15rem); }
+    .wave { font-size: 0.58rem; }
+    .weapons { font-size: 0.48rem; letter-spacing: 0.08em; line-height: 1.35; }
+    .lives { min-height: 12px; gap: 2px; }
+    .life-ship { width: 11px; height: 11px; }
+    .hud-label { font-size: 0.44rem; letter-spacing: 0.14em; margin-top: 1px; line-height: 1; }
+    .torpedoes { min-height: 9px; margin-top: 0; gap: 2px; }
+    .torpedo-icon { width: 9px; height: 9px; }
+    .shield-bar { width: min(22vw, 86px); height: 5px; }
+  }
   .highscores {
     max-height: 40vh;
     overflow-y: auto;
@@ -427,18 +472,19 @@
       </div>
       <div class="hud-right">
         <div class="lives" id="hudLives" aria-label="3 ships remaining"><img class="life-ship" src="../assets/ships/player_default.png" alt=""><img class="life-ship" src="../assets/ships/player_default.png" alt=""><img class="life-ship" src="../assets/ships/player_default.png" alt=""></div>
-        <div style="font-size:0.62rem; letter-spacing:0.2em; color:#FF8A24; margin-top:5px; text-align:right;">TORPEDO</div>
+        <div class="hud-label torpedo-label">TORPEDO</div>
         <div class="torpedoes" id="hudTorpedoes" aria-label="3 torpedoes"></div>
-        <div style="font-size:0.6rem; letter-spacing:0.25em; color:#3A7BFF; margin-top:4px;">SHIELD</div>
+        <div class="hud-label shield-label">SHIELD</div>
         <div class="shield-bar"><div class="shield-fill" id="shieldFill"></div></div>
       </div>
     </div>
   </div>
   <div id="hudFrame" aria-hidden="true">
-    <div class="hf-corner tl"></div><div class="hf-corner tr"></div>
-    <div class="hf-corner bl"></div><div class="hf-corner br"></div>
-    <div class="hf-edge top"></div><div class="hf-edge bottom"></div>
-    <div class="hf-edge left"></div><div class="hf-edge right"></div>
+    <img src="../assets/ui/cockpit_overlay_hud.png" alt="">
+  </div>
+  <div id="localFileNotice" hidden>
+    LOCAL FILE MODE: Chrome blocks generated sprites from the WebGL canvas here.
+    Launch preview-local.cmd from the project folder for the complete artwork.
   </div>
 </div>
 
@@ -452,6 +498,9 @@
 // which is then pushed through the WebGL bloom pipeline in postfx.js and
 // composited to the visible canvas. Game code below draws exactly as before.
 const display = document.getElementById('c');
+if (location.protocol === 'file:') {
+  document.getElementById('localFileNotice').hidden = false;
+}
 const canvas = document.createElement('canvas');
 const ctx = canvas.getContext('2d', { alpha: false });
 const postfx = createPostFX(display, canvas);
@@ -464,6 +513,8 @@ const SPRITES = {
   riftStalker: new Image(),
   shieldPickup: new Image(),
   rapidPickup: new Image(),
+  spreadPickup: new Image(),
+  piercePickup: new Image(),
   torpedo: new Image()
 };
 SPRITES.player.src = '../assets/ships/player_default.png';
@@ -471,6 +522,8 @@ SPRITES.asteroid.src = '../assets/asteroids/large/asteroid_01.png';
 SPRITES.riftStalker.src = '../assets/enemies/rift_stalker_01.png';
 SPRITES.shieldPickup.src = '../assets/powerups/shield_charge.png';
 SPRITES.rapidPickup.src = '../assets/powerups/rapid_fire.png';
+SPRITES.spreadPickup.src = '../assets/powerups/spread_fire.png';
+SPRITES.piercePickup.src = '../assets/powerups/pierce_shot.png';
 SPRITES.torpedo.src = '../assets/weapons/torpedo.png';
 const spriteSafety = new WeakMap();
 function spriteReady(sprite) {
@@ -1888,7 +1941,12 @@ function drawPowerups() {
       continue;
     }
 
-    const sprite = p.type === 'shield' ? SPRITES.shieldPickup : p.type === 'rapid' ? SPRITES.rapidPickup : p.type === 'torpedo' ? SPRITES.torpedo : null;
+    const sprite = p.type === 'shield' ? SPRITES.shieldPickup
+      : p.type === 'rapid' ? SPRITES.rapidPickup
+      : p.type === 'spread' ? SPRITES.spreadPickup
+      : p.type === 'pierce' ? SPRITES.piercePickup
+      : p.type === 'torpedo' ? SPRITES.torpedo
+      : null;
     if (sprite && spriteReady(sprite)) {
       const size = p.type === 'torpedo' ? 42 : 52;
       ctx.drawImage(sprite, -size / 2, -size / 2, size, size);
@@ -1896,8 +1954,7 @@ function drawPowerups() {
       continue;
     }
 
-    // SPREAD and PIERCE have no sprite yet: glowing ring plus a readable glyph
-    // in the weapon's bullet colour.
+    // Procedural fallback for SPREAD and PIERCE if image loading is unavailable.
     if (p.type === 'spread' || p.type === 'pierce') {
       const col = p.type === 'spread' ? '#00F5FF' : '#3A7BFF';
       ctx.save();

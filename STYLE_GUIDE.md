@@ -137,8 +137,8 @@ the blown-out core of every explosion.
   ship is lost** — death resets all stacks (and the score multiplier)
 - Piercing bullets render plasma-blue (`#3A7BFF`) so the buff is visible in flight;
   everything else the player fires stays neon-cyan
-- SPREAD/PIERCE pickups are procedural: glowing ring + glyph in the weapon's bullet
-  colour (no sprites yet)
+- SPREAD/PIERCE pickups use generated dark-gunmetal modules with large readable
+  weapon glyphs; the procedural ring + glyph renderers remain as load fallbacks
 
 ## Score Events (added 2026-08-07)
 - **Multiplier stars**: gold (`#FFD23F`) spinning four-point star, spawns at a random
@@ -156,9 +156,12 @@ the blown-out core of every explosion.
   blast-split every rock within 110px
 
 ## Cockpit Frame (added 2026-08-07)
-- Sci-fi HUD border: cyan corner brackets + hairline edge glows, pure CSS overlay
-- `pointer-events: none` and only ~10px deep at the extreme edges — it must never
-  block the playfield or cost canvas performance
+- Generated sci-fi cockpit overlay: dark-gunmetal perimeter rails with restrained
+  cyan edge lights and an intentionally open central canopy
+- Dedicated recessed instrument pods integrate the DOM HUD: score, wave, and weapon
+  stacks on the left; lives, torpedoes, and shield on the right
+- `pointer-events: none`; the frame stays at the perimeter and is more than 74%
+  transparent, while the DOM HUD renders above it for crisp, unobstructed readings
 - Ship renders at 1.18× visual scale; the collision radius stays 14 (forgiving
   hitbox, never a lying one)
 

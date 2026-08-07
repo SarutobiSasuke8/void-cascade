@@ -9,9 +9,13 @@ Record the source and licence of every asset at the moment it is added, not late
 | `enemies/rift_stalker_01.png` | AI-generated (project session, 2026-08-06) | Project-owned | 2026-08-06 |
 | `powerups/shield_charge.png` | AI-generated (project session, 2026-08-06) | Project-owned | 2026-08-06 |
 | `powerups/rapid_fire.png` | AI-generated (project session, 2026-08-06) | Project-owned | 2026-08-06 |
+| `powerups/spread_fire.png` | AI-generated with OpenAI imagegen (project session, 2026-08-07) | Project-owned | 2026-08-07 |
+| `powerups/pierce_shot.png` | AI-generated with OpenAI imagegen (project session, 2026-08-07) | Project-owned | 2026-08-07 |
 | `weapons/torpedo.png` | AI-generated (project session, 2026-08-06) | Project-owned | 2026-08-06 |
 | `backgrounds/menu_home.png` | AI-generated (project session, 2026-08-06) | Project-owned | 2026-08-06 |
 | `ui/void_cascade_banner.png` | AI-generated (project session, 2026-08-06) | Project-owned | 2026-08-06 |
+| `ui/cockpit_overlay.png` | AI-generated with OpenAI imagegen (project session, 2026-08-07) | Project-owned | 2026-08-07 |
+| `ui/cockpit_overlay_hud.png` | AI-generated with OpenAI imagegen (project session, 2026-08-07) | Project-owned | 2026-08-07 |
 | `banner.jpg` | AI-generated (project session, 2026-08-06) | Project-owned | 2026-08-06 |
 | `audio/void_cascade_theme.mp3` | Custom theme track | `TODO — confirm origin and licence before any public release` | 2026-08-06 |
 

@@ -14,8 +14,13 @@ Cinematic deep-space intensity mixed with pure arcade fun. Dark cosmic voids lit
 
 ## Play Now (Browser)
 
-Open `play/index.html` in a modern browser (Chrome / Firefox / Edge recommended).
-Works straight off the filesystem, no build step and no server required.
+Run `preview-local.cmd` and it will open the game at
+`http://127.0.0.1:4173/play/` in your browser. This cache-free local server is the
+supported preview path and requires Node.js, but no install or build step.
+
+Do not open `play/index.html` directly with `file://`: browser canvas security
+prevents local PNG sprites from being uploaded to the WebGL post-processing pass,
+so the game deliberately falls back to its procedural artwork in that mode.
 
 Full keyboard + gamepad support. Touch-friendly controls planned.
 
