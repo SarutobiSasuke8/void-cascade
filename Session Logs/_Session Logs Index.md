@@ -61,6 +61,10 @@ One-line fixes do not need a log.
   now decays (30s, cyan HUD underline), lives cap 9→5, mines 27% larger with magenta
   halo, enemy-tier aura + rank chevrons. Wave-20 dedicated boss and escalation levers
   queued as design directions in TODO.
+- [2026-08-08 — Cockpit frame glow tiers](2026-08-08-session-log-cockpit-glow-tiers.md)
+  — cockpit frame now mirrors the weapon loadout: subtle cyan lift at any ×2 stack,
+  gold breathing pulse at ×3 (OVERCHARGE). Second image layer, opacity-only animation.
+  Preview server gained `PORT` env-var support + `autoPort`.
 
 ## Current Themes
 

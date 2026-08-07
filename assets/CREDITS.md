@@ -6,6 +6,7 @@ Record the source and licence of every asset at the moment it is added, not late
 |---|---|---|---|
 | `ships/player_default.png` | AI-generated (project session, 2026-08-06) | Project-owned | 2026-08-06 |
 | `asteroids/large/asteroid_01.png` | AI-generated (project session, 2026-08-06) | Project-owned | 2026-08-06 |
+| `asteroids/large/void_iron_01.png` | AI-generated with OpenAI imagegen (project session, 2026-08-08) | Project-owned | 2026-08-08 |
 | `enemies/rift_stalker_01.png` | AI-generated (project session, 2026-08-06) | Project-owned | 2026-08-06 |
 | `enemies/rift_tendril/` (master, runtime sprite, idle preview) | AI-generated with OpenAI imagegen (project session, 2026-08-07) | Project-owned | 2026-08-07 |
 | `enemies/cascade_core/` (intact + three damage-state sprites) | AI-generated with OpenAI imagegen (project session, 2026-08-07) | Project-owned | 2026-08-07 |
