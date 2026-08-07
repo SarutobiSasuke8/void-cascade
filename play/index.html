@@ -78,16 +78,27 @@
       url('../assets/backgrounds/menu_home.png') center / cover no-repeat;
   }
   .screen.hidden { opacity: 0; pointer-events: none; }
-  /* Pause is a veil, not a room change: the frozen playfield stays readable
-     behind it, and body.paused lifts the cockpit frame above the veil so the
-     cockpit never vanishes mid-flight. The frame is pointer-events: none, so
-     the RESUME/QUIT buttons stay clickable underneath it. */
-  #pause { background: rgba(5, 1, 10, 0.55); }
-  /* Pause is a veil over a frozen playfield, so the instruments stay readable:
-     the cockpit frame AND the HUD both sit above it. Neither takes pointer
-     events, so RESUME/QUIT stay clickable underneath. */
-  body.paused #hudFrame { z-index: 12; }
-  body.paused .hud { z-index: 12; }
+  /* Pause is a veil over the FROZEN PLAYFIELD ONLY — the instruments must read
+     exactly as bright as they do in play.
+     The veil therefore lives in its own layer BELOW all UI (#pauseDim, z 7)
+     rather than on #pause itself, and nothing gets its z-index lifted.
+     Previously #pause carried the tint and body.paused raised both #hudFrame
+     and .hud to z-index 12 to escape it. That dulled the HUD: #hudFrame is a
+     later SIBLING of #ui, so at an equal z-index it won the tie and painted
+     its 0.92-opacity gunmetal frame image straight over the HUD.
+     Natural order (canvas < #pauseDim 7 < #hudFrame 9 < #ui 10) gives a dimmed
+     playfield, an undimmed cockpit, and an undimmed HUD with no overrides. */
+  #pauseDim {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 1, 10, 0.62);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    pointer-events: none;
+    z-index: 7;
+  }
+  body.paused #pauseDim { opacity: 1; }
+  #pause { background: transparent; }
   .logo {
     font-size: clamp(2.5rem, 8vw, 5.5rem);
     font-weight: 900;
@@ -580,6 +591,9 @@
 <body>
 <div id="gameContainer">
   <canvas id="c"></canvas>
+  <!-- Pause veil: dims the playfield only. Sits below the cockpit frame and
+       the HUD so the instruments never dim. See #pauseDim in the stylesheet. -->
+  <div id="pauseDim" aria-hidden="true"></div>
   <div id="fxLabel"></div>
   <div id="ui">
     <div id="menu" class="screen">
