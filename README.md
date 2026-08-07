@@ -35,6 +35,9 @@ The simulation is frame-rate independent, so it plays identically at 60, 120 and
 - High-velocity shooting
 - Breakable asteroids that split into smaller, faster fragments
 - Enemy fighters (**Rift Stalkers**)
+- Stackable weapon power-ups (rapid / spread / pierce) that persist until you lose the ship
+- Score multipliers, wave-clear bonus tallies, extra ships at score milestones, and a
+  rescuable lost starfighter
 - Power-ups, shields, and escalating difficulty
 - Pure skill-based high-score chase
 - Optional **Kid Mode** (easier difficulty, auto-shield assist, more frequent power-ups)

@@ -16,6 +16,19 @@ in chat or a session log. Keep it short — this is a queue, not an archive.
 
 ## Next
 
+- [ ] Shared online leaderboard — the TOP PILOTS board is `localStorage`, so every player
+      only ever sees their own scores, including on GitHub Pages. A truly shared board
+      needs a small backend (or a hosted service); decide whether the prototype wants one.
+- [ ] Pickup collection is blocked during respawn invulnerability (pre-existing: the
+      powerup loop sits below the `player.invuln` early-return in `checkCollisions`).
+      Probably should collect pickups while invulnerable — decide and fix.
+- [ ] Sprite art for the SPREAD / PIERCE / multiplier pickups — currently procedural
+      ring-and-glyph placeholders per `STYLE_GUIDE.md`.
+- [ ] Audio mix pass over the new explosion bus and the rebuilt thruster (reverb/drive/
+      sub/hiss levels) — set by ear; the 2026-08-07 levels were chosen headless.
+- [ ] Playtest the armoured-rock difficulty curve. `armorFor()` was tuned on paper
+      (large 1→4 hits from wave 7); confirm waves 7–15 feel escalating rather than
+      spongy, and that 14 large rocks still reads as "lots of asteroids".
 - [ ] Touch / mobile controls — untested; UI and input currently assume keyboard + mouse.
 - [ ] CRT scanline filter (optional, flagged in `STYLE_GUIDE.md`).
 - [ ] Asteroid variant sprites (`asteroid_02+`) and medium/small size tiers.

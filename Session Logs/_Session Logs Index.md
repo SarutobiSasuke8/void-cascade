@@ -34,6 +34,13 @@ One-line fixes do not need a log.
 - [2026-08-06 — Visual overhaul, audio, gameplay fixes](2026-08-06-session-log-visual-overhaul-audio-gameplay.md)
   — bloom pipeline rewrite (6-level mip pyramid), wave-clear swarm bug, procedural audio,
   ship/asteroid/enemy redesign, rebindable controls, leaderboard names.
+- [2026-08-07 — Weapon stacks, scoring systems, audio upgrade, cockpit HUD](2026-08-07-session-log-weapons-scoring-audio-hud.md)
+  — stackable persistent weapons (rapid/spread/pierce), torpedo vaporise + blast wave,
+  wave tally, multiplier stars, extra ships, lost starfighter, torpedo icon rack,
+  CSS cockpit frame, bigger ship, explosion bus (reverb/drive/pan/compressor),
+  menu-music autoplay handling. **Appended same day:** armoured asteroids and particle
+  pooling (late-wave p95 96.9ms → 13.9ms), life economy rebalance and cap, rebuilt
+  thruster, wave tally/toasts moved to DOM for legibility.
 
 ## Current Themes
 
@@ -43,3 +50,8 @@ One-line fixes do not need a log.
   dimming that looked like "bloom is just subtle".
 - The black background is load-bearing. Anything that lifts it (bloom knee, explosion
   flash) breaks the art direction immediately.
+- Bloom is indiscriminate: it re-blows out *anything* above its threshold, so text the
+  player must read cannot live on the game canvas. Canvas for the world, DOM for words.
+- Spectacle has a hidden cost curve. Particle counts and entity counts that feel right
+  at wave 5 are the direct cause of late-wave stutter; profile p95, not median, and
+  suspect GC when every phase spikes together.
