@@ -113,7 +113,10 @@
     margin-bottom: 0.3em;
   }
   #menu .logo {
-    width: min(84vw, 650px);
+    /* The title can use more of the canopy without competing for the action
+       controls' height. The menu scrolls on short viewports instead of
+       compressing the controls below. */
+    width: min(86vw, 760px);
     margin-bottom: 0.15rem;
     background: none;
     animation: none;
@@ -121,9 +124,9 @@
   }
   #menu .logo img {
     display: block;
-    /* Height-capped so a short window shrinks the banner instead of pushing
-       the buttons off-screen. */
-    max-height: 30vh;
+    /* Height-capped so the larger banner remains proportionate on short
+       windows. The action buttons below are explicitly non-shrinking. */
+    max-height: clamp(14rem, 32vh, 22rem);
     object-fit: contain;
     width: 100%;
     height: auto;
@@ -153,6 +156,16 @@
     transition: all 0.2s;
     position: relative;
     overflow: hidden;
+    /* Flex items shrink by default. When the menu is taller than the viewport
+       that squeezed the button boxes and clipped their labels. Keep every
+       action at its intended, readable size; #menu already supplies scrolling
+       for the remaining vertical overflow. */
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.2;
+    min-height: 3.25rem;
   }
   .btn:hover, .btn:focus {
     background: rgba(0,245,255,0.15);
@@ -164,6 +177,7 @@
     color: #3A7BFF;
     font-size: 0.85rem;
     padding: 0.6rem 1.8rem;
+    min-height: 2.7rem;
   }
   .btn.secondary:hover {
     background: rgba(58,123,255,0.15);
