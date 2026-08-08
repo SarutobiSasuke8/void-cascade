@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>VOID CASCADE</title>
+<link rel="icon" type="image/png" href="../assets/ships/player_default.png">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
   :root {
@@ -1504,7 +1505,7 @@ const AudioFX = (() => {
       if (!ac) return;
       const t = ac.currentTime;
       // Fast attack, slower release — a rocket lights instantly and trails off.
-      thrustGain.gain.setTargetAtTime(on ? 0.38 : 0, t, on ? 0.03 : 0.1);
+      thrustGain.gain.setTargetAtTime(on ? 0.42 : 0, t, on ? 0.03 : 0.1);
       // Pitch glides even while coasting so the tone never snaps on release.
       // The rise is small on purpose — a big sweep is what made the old burn
       // sound like it was playing a melody. Most of the "accelerating" read
